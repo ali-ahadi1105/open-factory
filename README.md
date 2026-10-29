@@ -1,66 +1,127 @@
-# Software Factory
+# OpenHands Autonomous Software Factory (v2)
 
-Set up a GitHub "software factory" fast, then grow it step by step. The skill
-asks only for the repositories, creates a working pipeline from catalog
-automations with their defaults, shows what runs, and lets the user stop there
-or extend it.
+An upgraded, autonomous Software Factory for [OpenHands](https://github.com/All-Hands-AI/OpenHands) and GitHub.
 
-## Trigger
+In addition to the standard OpenHands station pipeline, this enhanced version introduces **autonomous requirements decomposition** and **automated label/phase transition orchestration**. You only need to describe your project requirements, bug fix, or feature request once—the factory breaks it down, creates dependent GitHub issues, and automatically drives execution from Phase 1 to completion.
 
-This skill is activated by:
+---
 
-- `/software-factory`
-- the phrase "software factory" (only when the skill is enabled)
+## What It Sets Up
 
-## What it sets up
+| Station | Catalog ID | Role | Phase |
+|---|---|---|---|
+| **Phase Orchestrator** | `github-phase-orchestrator` | Monitors issue dependencies & unlocks next phase on PR merge | 1 or add-on |
+| **Issue to PR** | `github-issue-to-pr` | Implements labelled issues and opens pull requests | 1 |
+| **PR Reviewer** | `github-pr-reviewer` | Reviews open pull requests and posts findings | 1 |
+| **Issue Triage** | `github-issue-triage` | Triages incoming issues and labels them | 1 |
+| **Auto-merge Watchdog** | `github-delivery-watchdog` | Automatically merges approved PRs with green CI | add-on |
+| **AGENTS.md Maintainer** | `github-agents-md-maintainer` | Generates/maintains repository instructions for agents | add-on |
+| **Stale-CI PR Closer** | `github-stale-ci-pr-closer` | Closes PRs whose CI consistently fails | add-on |
+| **QA Changes** | `qa-changes` | Automated QA checks via webhooks | add-on |
 
-| Station | Catalog id | Phase |
-|---|---|---|
-| Issue to PR | `github-issue-to-pr`, or the Jira or Linear station | 1 |
-| PR reviewer | `github-pr-reviewer` | 1 |
-| Issue triage | `github-issue-triage` | 1 |
-| AGENTS.md maintainer | `github-agents-md-maintainer` | add-on |
-| Auto-merge watchdog | `github-delivery-watchdog` | add-on |
-| Stale-CI PR closer | `github-stale-ci-pr-closer` | add-on |
-| QA changes | `qa-changes` | add-on (webhooks only) |
+---
 
-`scripts/factory.py` (Python standard library, no LLM) does the catalog and API
-work - preflight checks, bundle upload and create, in-place tune, smoke run and
-enable - so Phase 1 takes four agent steps. The skill adds no automation logic of its own. Each station is the unmodified
-catalog bundle from `automations/catalog/<id>/`, configured from its `setup`
-block, so fixes to a station reach factories created by this skill too. A Jira
-or Linear issue to PR station is created by its own skill instead. Every
-station gets the `software-factory` tag (`factory.py tag` adds it to stations
-other skills create), so the Automations list can filter to the factory.
+## The Autonomous End-to-End Workflow
 
-## Flow
+```text
+[High-Level User Requirement / Spec]
+               │
+               ▼
+┌───────────────────────────────────────────────┐
+│ 1. Requirements Planner (factory.py plan)     │
+│ - Decomposes spec into ordered phases (DAG)   │
+│ - Creates GitHub issues with dependencies     │
+│ - Labels Phase 1: `openhands` (Triggered)     │
+│ - Labels Phase 2+: `blocked` + `blocked-by:#` │
+└──────────────────────┬────────────────────────┘
+                       │
+                       ▼
+┌───────────────────────────────────────────────┐
+│ 2. Implementation & Delivery Cycle            │
+│ - Issue to PR: implements Phase 1 and opens PR│
+│ - PR Reviewer: reviews and approves code      │
+│ - Watchdog: merges PR once CI tests pass      │
+└──────────────────────┬────────────────────────┘
+                       │
+                       ▼ (PR Merged / Issue #1 Closed)
+┌───────────────────────────────────────────────┐
+│ 3. Automated Orchestrator (Actions or Station)│
+│ - Detects completion of Phase 1 blocker       │
+│ - Removes `blocked` label from Phase 2 issue  │
+│ - Adds `openhands` trigger label to Phase 2   │
+│ ➔ OpenHands automatically starts Phase 2!     │
+└───────────────────────────────────────────────┘
+```
 
-1. **Phase 1**: verify `GITHUB_PERSONAL_ACCESS_TOKEN` (asked for with the
-   `request_secret` tool if missing, never in chat), ask for the repositories
-   and the ticket source (GitHub issues, Jira or Linear),
-   create the three Phase 1 stations with defaults, smoke-run them, and enable
-   those that pass.
-2. **Checkpoint**: show the stations, their settings and how to use the
-   factory. The user can stop here or pick a next step: try it with a test
-   issue, tune settings, or add a station.
-3. **Phase 2**: one round per pick, asking only the questions for it, then back
-   to the Checkpoint.
+---
 
-## Requirements
+## Quick Start & Commands
 
-- An automation backend whose `/api/automation/v1/capabilities` reports the
-  features each station's manifest requires (`customTarball`, plus
-  `agentProfiles` for issue to PR, reviewer and triage; QA needs webhook delivery).
-- A GitHub token with Contents, Issues, Pull requests and Workflows read and
-  write on every selected repository, created at
-  [GitHub settings](https://github.com/settings/personal-access-tokens).
-- An OpenHands (not ACP) agent profile that may use that token.
-- Jira tickets: a connected Atlassian Rovo server or a Jira API token. Linear
-  tickets: a Linear connection.
+Set your environment variables:
+```bash
+export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_..."
+export OPENHANDS_HOST="http://localhost:3000"  # or your OpenHands instance
+export OPENHANDS_AUTOMATION_API_KEY="..."       # or OPENHANDS_API_KEY
+```
 
-## Scope
+### 1. Requirements Planning (`plan`)
+Convert a feature description or spec file into phased issues on GitHub:
+```bash
+# Preview plan without touching GitHub (dry-run)
+python3 scripts/factory.py plan --repos owner/repo --spec-file requirement.md --dry-run
 
-Code lives on GitHub. Tickets can come from GitHub issues, Jira (through the
-`jira-issue-to-pr` skill) or Linear (through the `ticket-to-code-change`
-skill); only the issue to PR station changes. GitLab and Bitbucket code hosts
-are not part of this flow.
+# Create issues on GitHub
+python3 scripts/factory.py plan --repos owner/repo --spec-file requirement.md
+```
+
+### 2. Install GitHub Actions Orchestrator (Zero-Server Option)
+Install the event-driven workflow into the target repository so GitHub automatically advances phases on PR merge:
+```bash
+python3 scripts/factory.py install-orchestrator --repos owner/repo
+```
+
+### 3. Check / Run Orchestrator Manually
+```bash
+# Check issues once and unblock any satisfied phases
+python3 scripts/factory.py orchestrate --repos owner/repo
+
+# View full pipeline graph and phase statuses
+python3 scripts/factory.py graph --repos owner/repo
+```
+
+### 4. Create Standard OpenHands Stations
+```bash
+# Preflight checks
+python3 scripts/factory.py preflight --repos owner/repo
+
+# Create stations
+python3 scripts/factory.py create --repos owner/repo --ids github-issue-to-pr,github-pr-reviewer,github-phase-orchestrator,github-delivery-watchdog
+
+# Verify and enable
+python3 scripts/factory.py verify <automation_ids>
+```
+
+---
+
+## Directory Structure
+
+```text
+open-factory/
+├── README.md                      # This document
+├── SKILL.md                       # OpenHands skill definition
+├── commands/
+│   ├── software-factory.md        # /software-factory command
+│   └── factory-plan.md            # /factory-plan command
+├── scripts/
+│   ├── factory.py                 # Core CLI helper
+│   ├── planner.py                 # Requirements decomposition & DAG generation
+│   ├── orchestrator.py            # State machine & phase transition engine
+│   └── github_client.py           # Python stdlib GitHub API client
+├── templates/
+│   └── factory-orchestrator.yml   # Event-driven GitHub Actions workflow
+└── automations/
+    └── catalog/
+        └── github-phase-orchestrator/ # OpenHands automation catalog station
+            ├── manifest.json
+            └── worker.py
+```

@@ -36,6 +36,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+# Ensure local script directory is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+LOCAL_ROOT = Path(__file__).resolve().parent.parent
+
 TOKEN_SECRET = "GITHUB_PERSONAL_ACCESS_TOKEN"
 EXTENSIONS_URL = "https://github.com/OpenHands/extensions"
 PLACEHOLDER_RE = re.compile(r"\{\{([a-z]+)\.([A-Za-z0-9_.]+)\}\}")
@@ -47,6 +51,7 @@ STATIONS = (
     "github-delivery-watchdog",
     "github-stale-ci-pr-closer",
     "qa-changes",
+    "github-phase-orchestrator",
 )
 TERMINAL = {"COMPLETED", "FAILED", "CANCELLED", "SKIPPED"}
 # Every station carries this tag, so the Automations list can filter to the factory.
@@ -168,6 +173,12 @@ def _extensions() -> Path:
     installed = Path(__file__).resolve().parents[3]
     if (installed / "automations" / "catalog").is_dir():
         return installed
+    known_paths = [
+        Path.home() / ".nvm/versions/node/v24.20.0/lib/node_modules/@openhands/agent-canvas/node_modules/@openhands/extensions",
+    ]
+    for p in known_paths:
+        if (p / "automations" / "catalog").is_dir():
+            return p
     root = Path("/tmp/software-factory/extensions")
     if not (root / "automations" / "catalog").is_dir():
         root.parent.mkdir(parents=True, exist_ok=True)
@@ -190,10 +201,13 @@ def _release_ref() -> str | None:
 
 
 def _manifest(station: str) -> dict:
+    local_path = LOCAL_ROOT / "automations" / "catalog" / station / "manifest.json"
+    if local_path.is_file():
+        return json.loads(local_path.read_text(encoding="utf-8"))
     path = _extensions() / "automations" / "catalog" / station / "manifest.json"
     if not path.is_file():
         raise FactoryError(f"unknown station: {station}")
-    return json.loads(path.read_text())
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _needs_profile(entry: dict) -> bool:
@@ -281,7 +295,12 @@ def _tarball(root: Path, files: dict, config: dict) -> bytes:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for archive_name, repo_path in files.items():
-            tar.add(str((root / repo_path).resolve()), arcname=archive_name)
+            local_src = (LOCAL_ROOT / repo_path).resolve()
+            ext_src = (root / repo_path).resolve()
+            src = local_src if local_src.is_file() else ext_src
+            if not src.is_file():
+                raise FactoryError(f"file not found for bundle: {repo_path}")
+            tar.add(str(src), arcname=archive_name)
         data = json.dumps(config, indent=2).encode()
         info = tarfile.TarInfo("config.json")
         info.size = len(data)
@@ -657,6 +676,109 @@ def _split(text: str) -> list[str]:
     return [part.strip() for part in text.split(",") if part.strip()]
 
 
+def factory_plan(args) -> dict:
+    """Break requirements down into phased issues with automated dependencies."""
+    from planner import execute_plan, parse_json_plan, parse_markdown_spec
+
+    content = ""
+    is_json = False
+    if getattr(args, "plan_file", None):
+        content = Path(args.plan_file).read_text(encoding="utf-8")
+        is_json = True
+    elif getattr(args, "spec_file", None):
+        content = Path(args.spec_file).read_text(encoding="utf-8")
+    elif getattr(args, "spec", None):
+        content = args.spec
+    else:
+        if not sys.stdin.isatty():
+            content = sys.stdin.read()
+        else:
+            raise FactoryError("Provide requirements via --spec, --spec-file, --plan-file, or stdin")
+
+    tasks = parse_json_plan(content) if is_json else parse_markdown_spec(content)
+    if not tasks:
+        raise FactoryError("Could not extract any tasks or phases from input")
+
+    client = None if args.dry_run else GitHubClient()
+    repos = _split(args.repos)
+    all_results = {}
+    for repo in repos:
+        try:
+            res = execute_plan(
+                repo=repo,
+                tasks=tasks,
+                client=client,
+                trigger_label=getattr(args, "trigger_label", "openhands"),
+                blocked_label=getattr(args, "blocked_label", "blocked"),
+                dry_run=args.dry_run,
+            )
+            all_results[repo] = res
+        except Exception as err:
+            raise FactoryError(f"Planning failed on {repo}: {err}") from err
+    return all_results
+
+
+def factory_orchestrate(args) -> dict:
+    """Inspect issues, check prerequisite closures, and unblock dependent phases."""
+    from github_client import GitHubClient
+    from orchestrator import check_and_transition
+
+    client = GitHubClient()
+    repos = _split(args.repos)
+    all_results = {}
+    for repo in repos:
+        try:
+            res = check_and_transition(
+                repo=repo,
+                client=client,
+                trigger_label=getattr(args, "trigger_label", "openhands"),
+                blocked_label=getattr(args, "blocked_label", "blocked"),
+                dry_run=getattr(args, "dry_run", False),
+            )
+            all_results[repo] = res
+        except Exception as err:
+            raise FactoryError(f"Orchestration check failed on {repo}: {err}") from err
+    return all_results
+
+
+def factory_install_orchestrator(args) -> dict:
+    """Commit the automated phase orchestrator GitHub Actions workflow to the repository."""
+    from github_client import GitHubClient
+    from orchestrator import install_orchestrator_workflow
+
+    client = GitHubClient()
+    repos = _split(args.repos)
+    all_results = {}
+    for repo in repos:
+        try:
+            res = install_orchestrator_workflow(
+                repo=repo,
+                client=client,
+                branch=getattr(args, "branch", "main"),
+            )
+            all_results[repo] = res
+        except Exception as err:
+            raise FactoryError(f"Failed to install orchestrator on {repo}: {err}") from err
+    return all_results
+
+
+def factory_graph(args) -> dict:
+    """Retrieve and display the current status of all factory issues and their dependencies."""
+    from github_client import GitHubClient
+    from orchestrator import get_pipeline_graph
+
+    client = GitHubClient()
+    repos = _split(args.repos)
+    all_results = {}
+    for repo in repos:
+        try:
+            res = get_pipeline_graph(repo=repo, client=client)
+            all_results[repo] = res
+        except Exception as err:
+            raise FactoryError(f"Failed to retrieve pipeline graph for {repo}: {err}") from err
+    return all_results
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -693,6 +815,34 @@ def main() -> int:
     p.set_defaults(func=prs)
     p = sub.add_parser("reset-token")
     p.set_defaults(func=reset_token)
+
+    # --- New Autonomous Software Factory Commands ---
+    p = sub.add_parser("plan", help="Break specification into phased GitHub issues with dependencies")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.add_argument("--spec", help="Specification text")
+    p.add_argument("--spec-file", help="Path to markdown specification file")
+    p.add_argument("--plan-file", help="Path to pre-structured JSON plan file")
+    p.add_argument("--trigger-label", default="openhands", help="Trigger label for unblocked phases (default: openhands)")
+    p.add_argument("--blocked-label", default="blocked", help="Label for queued phases (default: blocked)")
+    p.add_argument("--dry-run", action="store_true", help="Preview plan and issues without modifying GitHub")
+    p.set_defaults(func=factory_plan)
+
+    p = sub.add_parser("orchestrate", help="Scan repository and advance phases whose blockers are closed")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.add_argument("--trigger-label", default="openhands")
+    p.add_argument("--blocked-label", default="blocked")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=factory_orchestrate)
+
+    p = sub.add_parser("install-orchestrator", help="Install GitHub Actions phase orchestrator workflow")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.add_argument("--branch", default="main", help="Target branch (default: main)")
+    p.set_defaults(func=factory_install_orchestrator)
+
+    p = sub.add_parser("graph", help="Show all factory issues and their dependency status")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.set_defaults(func=factory_graph)
+
     args = parser.parse_args()
     try:
         print(json.dumps(args.func(args), indent=2))

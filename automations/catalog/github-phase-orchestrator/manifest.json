@@ -1,0 +1,79 @@
+{
+  "id": "github-phase-orchestrator",
+  "version": "1.0.0",
+  "name": "GitHub phase orchestrator",
+  "category": "Project management",
+  "description": "Monitors dependencies between issues, unblocks downstream phases when pull requests are merged, and applies the OpenHands trigger label.",
+  "requires": {
+    "integrations": {},
+    "features": [
+      "customTarball"
+    ]
+  },
+  "estimatedSetupMinutes": 2,
+  "exampleImplementation": "A deterministic scheduled scanner checks all open issues carrying the blocked label. When all prerequisite issues or PRs are completed, it lifts the blocked status and attaches the openhands trigger label to kick off the next development phase.",
+  "setup": {
+    "version": "1.0",
+    "mode": "direct",
+    "form": {
+      "triggers": {
+        "cron": {
+          "schedule": {
+            "type": "cron",
+            "label": "Check frequency",
+            "help": "How often to check for completed phases and unlock dependent issues.",
+            "default": "*/5 * * * *",
+            "required": true
+          },
+          "timezone": {
+            "type": "timezone",
+            "label": "Timezone",
+            "help": "Timezone for the schedule.",
+            "default": "UTC",
+            "required": true
+          }
+        }
+      },
+      "args": {
+        "repositories": {
+          "type": "repo-picker",
+          "provider": "github",
+          "multiple": true,
+          "label": "Repositories",
+          "help": "Repositories this orchestrator monitors.",
+          "required": true
+        },
+        "githubTokenSecret": {
+          "type": "text",
+          "label": "GitHub token secret",
+          "help": "Name of a saved Agent Server secret.",
+          "default": "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "required": true
+        },
+        "triggerLabel": {
+          "type": "text",
+          "label": "Trigger label",
+          "help": "Label to apply when an issue is unblocked.",
+          "default": "openhands",
+          "required": true
+        }
+      }
+    },
+    "bundle": {
+      "version": "1.0.0",
+      "entrypoint": "python3 worker.py",
+      "timeout": 300,
+      "files": {
+        "worker.py": "automations/catalog/github-phase-orchestrator/worker.py",
+        "github_client.py": "scripts/github_client.py"
+      },
+      "config": {
+        "repos": "{{form.repositories}}",
+        "github_token_secret": "{{form.githubTokenSecret}}",
+        "trigger_label": "{{form.triggerLabel}}"
+      }
+    },
+    "message": "Configure the repositories, token secret, trigger label, and schedule."
+  },
+  "popularityRank": 85
+}

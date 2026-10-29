@@ -9,6 +9,8 @@ description: >
 triggers:
   - /software-factory
   - software factory
+  - /factory-plan
+  - plan feature
 ---
 
 # Software Factory
@@ -32,6 +34,7 @@ Bitbucket code hosts are not part of this flow.
 | Issue to PR | `github-issue-to-pr`, or the Jira or Linear station | 1 | yes (GitHub issues only) |
 | PR reviewer | `github-pr-reviewer` | 1 | yes |
 | Issue triage | `github-issue-triage`, or `linear-triage-assistant` | 1 | yes (GitHub issues only) |
+| Phase orchestrator | `github-phase-orchestrator` | 1 or add-on | no |
 | AGENTS.md maintainer | `github-agents-md-maintainer` | add-on | no |
 | Auto-merge watchdog | `github-delivery-watchdog` | add-on | no |
 | Stale-CI PR closer | `github-stale-ci-pr-closer` | add-on | no |
@@ -69,6 +72,10 @@ The script reads the token and never prints it.
 | `$F status ID...` | The latest run of each. |
 | `$F prs --repos a/b [--branch-prefix P]` | Open pull requests whose branch starts with `P` (default `openhands/agents-md`, the AGENTS.md maintainer's). |
 | `$F reset-token` | Deletes the saved `GITHUB_PERSONAL_ACCESS_TOKEN` (local Agent Canvas), so `request_secret` opens its form again. |
+| `$F plan --repos a/b [--spec "..." \| --spec-file F \| --plan-file P] [--dry-run]` | Analyzes requirements, breaks them into phased DAG issues, marks Phase 1 with `openhands` and Phase 2+ with `blocked`. |
+| `$F orchestrate --repos a/b [--dry-run]` | Scans open issues; when all blockers for a phase are closed/merged, lifts `blocked` and attaches `openhands`. |
+| `$F install-orchestrator --repos a/b [--branch main]` | Installs the GitHub Actions phase orchestrator workflow directly into the target repository. |
+| `$F graph --repos a/b` | Displays the status and dependency relationships of all software factory issues in the repository. |
 
 `create` and `verify` return each automation's `url`, its page in Agent Canvas.
 Trust the script's output: do not open pages in the browser to check them, and
@@ -242,3 +249,36 @@ Once its skill has created the station, run `$F tag <id>` and then
 | Issue to PR fails at push | The token lacks Contents or Workflows write, or does not cover that repository. |
 | Reviewer never reviews | The pull request has neither the trigger label nor a request for the trigger reviewer, and is not green. |
 | Watchdog never merges | Its branch prefix differs from issue to PR's, or the pull request lacks an independent approval or green CI. |
+
+## Autonomous Requirements Planning and Phased Execution
+
+When the user specifies a high-level requirement (e.g. building a new feature, fixing a bug, or building a project from a spec):
+
+1. **Requirements Planning (`$F plan`)**:
+   - The agent analyzes the user prompt and breaks it into an ordered Directed Acyclic Graph (DAG) of implementation phases.
+   - The agent executes:
+     ```bash
+     $F plan --repos <repo> --spec "<structured_or_raw_spec>"
+     ```
+   - **Phase 1 (root)** is assigned the trigger label `openhands` and status `status:ready`.
+   - **Phase 2+ (dependents)** are assigned status `blocked` and `blocked-by:#<issue_id>`.
+   - A visual Mermaid DAG diagram is displayed to the user.
+
+2. **Automated State Transition & Label Management**:
+   Choose one of two orchestrator modes:
+   - **Option A (Zero-overhead GitHub Actions - Recommended)**:
+     Install the orchestrator workflow into the repo once:
+     ```bash
+     $F install-orchestrator --repos <repo>
+     ```
+     GitHub Actions will listen to pull request merges and automatically remove `blocked`, attach `openhands`, and post progress comments on the next phase!
+   - **Option B (Station / Polling)**:
+     Create the `github-phase-orchestrator` station or run `$F orchestrate --repos <repo>` periodically.
+
+3. **Hands-free Execution Loop**:
+   - OpenHands implements Phase 1 (`github-issue-to-pr`).
+   - PR is reviewed (`github-pr-reviewer`).
+   - PR is merged once CI is green (`github-delivery-watchdog`).
+   - Merging PR closes Phase 1 issue $\rightarrow$ Orchestrator unlocks Phase 2 by adding `openhands`.
+   - The cycle continues until all phases are delivered!
+
