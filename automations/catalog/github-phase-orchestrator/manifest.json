@@ -65,7 +65,8 @@
       "timeout": 300,
       "files": {
         "worker.py": "automations/catalog/github-phase-orchestrator/worker.py",
-        "github_client.py": "scripts/github_client.py"
+        "github_client.py": "skills/ali-factory/scripts/github_client.py",
+        "orchestrator.py": "skills/ali-factory/scripts/orchestrator.py"
       },
       "config": {
         "repos": "{{form.repositories}}",

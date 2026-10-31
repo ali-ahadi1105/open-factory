@@ -72,8 +72,8 @@
       "timeout": 300,
       "files": {
         "worker.py": "automations/catalog/github-pr-healer/worker.py",
-        "github_client.py": "scripts/github_client.py",
-        "healer.py": "scripts/healer.py"
+        "github_client.py": "skills/ali-factory/scripts/github_client.py",
+        "healer.py": "skills/ali-factory/scripts/healer.py"
       },
       "config": {
         "repos": "{{form.repositories}}",

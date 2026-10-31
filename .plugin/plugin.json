@@ -1,19 +1,21 @@
 {
-  "name": "software-factory",
-  "version": "1.0.0",
-  "description": "Set up a GitHub software factory fast: ask only for the repositories and the ticket source (GitHub issues, Jira or Linear), create a working issue-to-PR and PR-review pipeline from catalog automations with defaults, then let the user stop or extend it step by step.",
+  "name": "ali-factory",
+  "version": "2.0.0",
+  "description": "Autonomous GitHub software factory with requirements planning, DAG phase orchestration, and PR auto-healing (CI / review feedback loop).",
   "author": {
-    "name": "OpenHands",
+    "name": "Ali",
     "email": "contact@all-hands.dev"
   },
   "homepage": "https://github.com/OpenHands/extensions",
   "repository": "https://github.com/OpenHands/extensions",
   "license": "MIT",
   "keywords": [
-    "onboarding",
+    "ali-factory",
     "software-factory",
+    "autonomous",
     "github",
     "automation",
-    "pull-request"
+    "orchestrator",
+    "healer"
   ]
 }
