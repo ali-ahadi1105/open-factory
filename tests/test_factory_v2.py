@@ -143,5 +143,117 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("create_comment", actions)
 
 
+class MockHealerGitHubClient(MockGitHubClient):
+    def __init__(self, issues: list[dict], check_runs=None, workflow_runs=None, reviews=None, comments=None):
+        super().__init__(issues)
+        self._check_runs = check_runs or []
+        self._workflow_runs = workflow_runs or []
+        self._reviews = reviews or []
+        self._comments = comments or []
+        self.statuses_log = []
+
+    def get_check_runs(self, repo: str, commit_sha: str):
+        return self._check_runs
+
+    def list_workflow_runs_for_commit(self, repo: str, commit_sha: str):
+        return self._workflow_runs
+
+    def list_reviews(self, repo: str, number: int):
+        return self._reviews
+
+    def list_review_comments(self, repo: str, number: int):
+        return self._comments
+
+    def create_commit_status(self, repo: str, commit_sha: str, state: str, context: str, description: str = "", target_url: str = ""):
+        self.statuses_log.append({"sha": commit_sha, "state": state, "context": context, "description": description})
+        return {"state": state, "context": context}
+
+
+class TestHealer(unittest.TestCase):
+    def test_diagnose_pr_ci_failed(self):
+        from healer import diagnose_pr
+
+        pr = {
+            "number": 42,
+            "head": {"sha": "abc1234", "ref": "openhands/issue-42"},
+            "labels": [],
+        }
+        mock_checks = [
+            {"name": "test-suite", "status": "completed", "conclusion": "failure", "output": {"summary": "2 tests failed"}},
+            {"name": "linter", "status": "completed", "conclusion": "success"},
+        ]
+        client = MockHealerGitHubClient(issues=[], check_runs=mock_checks)
+        diag = diagnose_pr("owner/repo", pr, client)
+        self.assertEqual(diag.status, "CI_FAILED")
+        self.assertEqual(len(diag.failed_checks), 1)
+        self.assertIn("test-suite", diag.reasons[0])
+
+    def test_diagnose_pr_changes_requested(self):
+        from healer import diagnose_pr
+
+        pr = {
+            "number": 42,
+            "head": {"sha": "abc1234", "ref": "openhands/issue-42"},
+            "labels": [],
+        }
+        mock_reviews = [
+            {"user": {"login": "senior-dev"}, "state": "CHANGES_REQUESTED", "body": "Please add validation on line 50."},
+        ]
+        client = MockHealerGitHubClient(issues=[], reviews=mock_reviews)
+        diag = diagnose_pr("owner/repo", pr, client)
+        self.assertEqual(diag.status, "CHANGES_REQUESTED")
+        self.assertEqual(len(diag.reviews_feedback), 1)
+        self.assertIn("senior-dev", diag.reasons[0])
+
+    def test_heal_pr_triggers_revision(self):
+        from healer import diagnose_pr, heal_pr
+
+        pr = {
+            "number": 42,
+            "head": {"sha": "abc1234", "ref": "openhands/issue-42"},
+            "labels": [],
+        }
+        mock_checks = [
+            {"name": "test-suite", "status": "completed", "conclusion": "failure", "output": {"summary": "ZeroDivisionError"}},
+        ]
+        client = MockHealerGitHubClient(issues=[{"number": 42, "labels": []}], check_runs=mock_checks)
+        diag = diagnose_pr("owner/repo", pr, client)
+        outcome = heal_pr("owner/repo", pr, diag, client, max_retries=3)
+
+        self.assertEqual(outcome["action"], "revision_triggered")
+        self.assertEqual(outcome["attempt"], 1)
+
+        # Check commit status was set to failure for software-factory/review
+        review_statuses = [s for s in client.statuses_log if s["context"] == "software-factory/review"]
+        self.assertTrue(len(review_statuses) > 0)
+        self.assertEqual(review_statuses[0]["state"], "failure")
+
+        # Check attempt label was added
+        added_labels = [a[2] for a in client.actions_log if a[0] == "add_labels"]
+        self.assertTrue(any("fix-attempt:1" in l for l in added_labels))
+
+    def test_heal_pr_escalates_when_exhausted(self):
+        from healer import diagnose_pr, heal_pr, ESCALATION_LABEL
+
+        pr = {
+            "number": 42,
+            "head": {"sha": "abc1234", "ref": "openhands/issue-42"},
+            "labels": [{"name": "fix-attempt:3"}],
+        }
+        mock_checks = [
+            {"name": "test-suite", "status": "completed", "conclusion": "failure"},
+        ]
+        client = MockHealerGitHubClient(issues=[{"number": 42, "labels": [{"name": "fix-attempt:3"}]}], check_runs=mock_checks)
+        diag = diagnose_pr("owner/repo", pr, client)
+        self.assertEqual(diag.attempt_count, 3)
+
+        outcome = heal_pr("owner/repo", pr, diag, client, max_retries=3)
+        self.assertEqual(outcome["action"], "escalated_to_human")
+
+        # Check escalation label was added
+        added_labels = [a[2] for a in client.actions_log if a[0] == "add_labels"]
+        self.assertTrue(any(ESCALATION_LABEL in l for l in added_labels))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -35,6 +35,7 @@ Bitbucket code hosts are not part of this flow.
 | PR reviewer | `github-pr-reviewer` | 1 | yes |
 | Issue triage | `github-issue-triage`, or `linear-triage-assistant` | 1 | yes (GitHub issues only) |
 | Phase orchestrator | `github-phase-orchestrator` | 1 or add-on | no |
+| PR auto-healer | `github-pr-healer` | 1 or add-on | no |
 | AGENTS.md maintainer | `github-agents-md-maintainer` | add-on | no |
 | Auto-merge watchdog | `github-delivery-watchdog` | add-on | no |
 | Stale-CI PR closer | `github-stale-ci-pr-closer` | add-on | no |
@@ -74,7 +75,9 @@ The script reads the token and never prints it.
 | `$F reset-token` | Deletes the saved `GITHUB_PERSONAL_ACCESS_TOKEN` (local Agent Canvas), so `request_secret` opens its form again. |
 | `$F plan --repos a/b [--spec "..." \| --spec-file F \| --plan-file P] [--dry-run]` | Analyzes requirements, breaks them into phased DAG issues, marks Phase 1 with `openhands` and Phase 2+ with `blocked`. |
 | `$F orchestrate --repos a/b [--dry-run]` | Scans open issues; when all blockers for a phase are closed/merged, lifts `blocked` and attaches `openhands`. |
-| `$F install-orchestrator --repos a/b [--branch main]` | Installs the GitHub Actions phase orchestrator workflow directly into the target repository. |
+| `$F heal --repos a/b [--max-retries 3] [--dry-run]` | Scans factory PRs; when CI fails or review requests changes, flags `software-factory/review: failure` to trigger OpenHands revision loop. |
+| `$F watch --repos a/b [--interval 30]` | Continuously polls repository: advances unblocked phases AND automatically heals failing PRs. |
+| `$F install-orchestrator --repos a/b [--branch main]` | Installs the GitHub Actions phase orchestrator & auto-healer workflow directly into the target repository. |
 | `$F graph --repos a/b` | Displays the status and dependency relationships of all software factory issues in the repository. |
 
 `create` and `verify` return each automation's `url`, its page in Agent Canvas.
@@ -281,4 +284,26 @@ When the user specifies a high-level requirement (e.g. building a new feature, f
    - PR is merged once CI is green (`github-delivery-watchdog`).
    - Merging PR closes Phase 1 issue $\rightarrow$ Orchestrator unlocks Phase 2 by adding `openhands`.
    - The cycle continues until all phases are delivered!
+
+4. **Automated PR Healing & CI Feedback Loop (`$F heal` / `github-pr-healer`)**:
+   - **The Problem**: OpenHands's `IssueToPR` revision trigger specifically requires the commit status `software-factory/review` to be `failure` or `error`. Standard GitHub Actions CI test failures and human/bot reviews with `CHANGES_REQUESTED` never set this status natively, causing the pipeline to stall indefinitely.
+   - **The Solution**: The PR Healer diagnoses open pull requests:
+     - Scans for failed GitHub Actions checks (`failure`, `timed_out`, `action_required`) and PR reviews requesting changes (`CHANGES_REQUESTED` or unresolved inline comments).
+     - Formats diagnostic findings and posts a clear action item comment on the PR.
+     - Sets the commit status `software-factory/review` to `failure` on the PR head commit SHA, which immediately triggers OpenHands to revise and commit a fix!
+     - Tracks retry attempts via `fix-attempt:N` and labels PR with `openhands-fix`.
+   - **Loop Protection & Escalation**:
+     - Up to `max_retries` (default: 3) are attempted automatically.
+     - If fixes fail repeatedly beyond the threshold, the healer tags the PR with `needs-human-attention` and stops re-triggering to prevent infinite loops and token waste.
+   - **Execution Modes**:
+     - **Event-Driven (GitHub Actions)**: Included automatically in `factory-orchestrator.yml` (triggers on `workflow_run: completed` and `pull_request_review: submitted`).
+     - **Station Mode**: Station `github-pr-healer` in OpenHands.
+     - **CLI Commands**:
+       ```bash
+       # Heal all or specific PRs once
+       $F heal --repos <repo> [--pr <pr_number>]
+
+       # Concurrently monitor phase transitions and heal PRs in real-time
+       $F watch --repos <repo> [--interval 30]
+       ```
 

@@ -1,8 +1,12 @@
-name: Software Factory Phase Orchestrator
+name: Software Factory Phase Orchestrator & Auto-Healer
 
 on:
   pull_request:
     types: [closed]
+  pull_request_review:
+    types: [submitted]
+  workflow_run:
+    types: [completed]
   issues:
     types: [closed]
   workflow_dispatch:
@@ -10,15 +14,16 @@ on:
 permissions:
   contents: write
   issues: write
-  pull-requests: read
+  pull-requests: write
+  statuses: write
+  checks: read
+  actions: read
 
 jobs:
-  advance-phase:
-    # Trigger if an issue was closed or if a PR was closed AND merged
-    if: (github.event_name == 'issues' && github.event.action == 'closed') || (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+  software-factory-orchestrator:
     runs-on: ubuntu-latest
     steps:
-      - name: Run Phase Orchestrator
+      - name: Run Orchestrator and Auto-Healer
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -48,7 +53,9 @@ jobs:
                       return None
                   raise
 
-          # Fetch open issues
+          # ===============================================================
+          # PART 1: ADVANCE PHASES (Unblock downstream tasks when dependencies complete)
+          # ===============================================================
           open_issues = api("GET", "/issues?state=open&per_page=100") or []
           open_issues = [i for i in open_issues if "pull_request" not in i]
 
@@ -63,7 +70,6 @@ jobs:
               labels = [l["name"] if isinstance(l, dict) else str(l) for l in issue.get("labels", [])]
               blockers = set()
               
-              # Extract from metadata
               meta = re.search(r"<!--\s*software-factory-metadata:\s*({.*?})\s*-->", body)
               if meta:
                   try:
@@ -72,7 +78,6 @@ jobs:
                   except Exception:
                       pass
               
-              # Extract from labels
               for l in labels:
                   m = re.match(r"^blocked-by:#?(\d+)$", l, re.IGNORECASE)
                   if m:
@@ -94,7 +99,6 @@ jobs:
 
               if all_done:
                   print(f"Unblocking issue #{issue['number']}: {issue['title']}")
-                  # Remove blocked labels
                   if "blocked" in labels:
                       try:
                           api("DELETE", f"/issues/{issue['number']}/labels/blocked")
@@ -107,10 +111,8 @@ jobs:
                           except Exception:
                               pass
                   
-                  # Add openhands trigger label
                   api("POST", f"/issues/{issue['number']}/labels", {"labels": ["openhands", "status:ready"]})
                   
-                  # Post comment
                   summary = "\n".join([f"- {r}" for r in resolved])
                   comment = (
                       f"### 🚀 All Dependencies Resolved!\n\n"
@@ -122,4 +124,105 @@ jobs:
                       f"OpenHands Software Factory will now automatically begin implementation of this phase."
                   )
                   api("POST", f"/issues/{issue['number']}/comments", {"body": comment})
+
+          # ===============================================================
+          # PART 2: PR AUTO-HEALER (Detect CI failures and review change requests)
+          # ===============================================================
+          open_prs = api("GET", "/pulls?state=open&per_page=100") or []
+          for pr in open_prs:
+              branch = pr.get("head", {}).get("ref", "")
+              if not branch.startswith("openhands/issue"):
+                  continue
+
+              pr_num = pr["number"]
+              head_sha = pr["head"]["sha"]
+              pr_labels = [l["name"] if isinstance(l, dict) else str(l) for l in pr.get("labels", [])]
+
+              if "needs-human-attention" in pr_labels:
+                  continue
+
+              attempt = 0
+              for l in pr_labels:
+                  m = re.match(r"^fix-attempt:(\d+)$", l)
+                  if m:
+                      attempt = int(m.group(1))
+
+              reasons = []
+
+              # Check Check Runs
+              checks = api("GET", f"/commits/{head_sha}/check-runs") or {}
+              for c in checks.get("check_runs", []):
+                  if c.get("conclusion") in ("failure", "timed_out", "action_required", "cancelled"):
+                      c_name = c.get("name", "check")
+                      out = c.get("output") or {}
+                      summ = out.get("summary") or out.get("title") or c.get("conclusion")
+                      reasons.append(f"CI check `{c_name}` failed ({c.get('conclusion')}): {summ[:150]}")
+
+              # Check Reviews
+              reviews = api("GET", f"/pulls/{pr_num}/reviews") or []
+              latest_by_user = {}
+              for r in reviews:
+                  u = (r.get("user") or {}).get("login", "")
+                  latest_by_user[u] = r
+              for u, r in latest_by_user.items():
+                  if r.get("state") == "CHANGES_REQUESTED":
+                      b = (r.get("body") or "").strip()
+                      reasons.append(f"Reviewer @{u} requested changes" + (f": {b[:150]}" if b else ""))
+
+              if not reasons:
+                  # If previously had fix-attempt labels and now clean, clean them up
+                  if any(re.match(r"^fix-attempt:\d+$", l) for l in pr_labels) or "openhands-fix" in pr_labels:
+                      for l in pr_labels:
+                          if re.match(r"^fix-attempt:\d+$", l) or l == "openhands-fix":
+                              try:
+                                  api("DELETE", f"/issues/{pr_num}/labels/{urllib.parse.quote(l)}")
+                              except Exception:
+                                  pass
+                      api("POST", f"/issues/{pr_num}/comments", {
+                          "body": f"### ✅ Verifications Passed!\nAll CI checks and reviews are passing on `{head_sha[:7]}`. Ready for merge."
+                      })
+                  continue
+
+              new_attempt = attempt + 1
+              if new_attempt > 3:
+                  # Escalate to human
+                  for l in pr_labels:
+                      if re.match(r"^fix-attempt:\d+$", l) or l == "openhands-fix":
+                          try:
+                              api("DELETE", f"/issues/{pr_num}/labels/{urllib.parse.quote(l)}")
+                          except Exception:
+                              pass
+                  api("POST", f"/issues/{pr_num}/labels", {"labels": ["needs-human-attention"]})
+                  esc_md = "\n".join([f"- {r}" for r in reasons])
+                  api("POST", f"/issues/{pr_num}/comments", {
+                      "body": f"### 🚨 Automated Repair Limit Reached ({attempt}/3 Attempts)\n\n"
+                              f"OpenHands attempted to resolve this PR multiple times without success.\n\n"
+                              f"**Blockers:**\n{esc_md}\n\nManual developer attention is required."
+                  })
+              else:
+                  # Trigger repair revision
+                  for l in pr_labels:
+                      if re.match(r"^fix-attempt:\d+$", l):
+                          try:
+                              api("DELETE", f"/issues/{pr_num}/labels/{urllib.parse.quote(l)}")
+                          except Exception:
+                              pass
+                  api("POST", f"/issues/{pr_num}/labels", {"labels": [f"fix-attempt:{new_attempt}", "openhands-fix"]})
+
+                  # Set commit status to failure for software-factory/review to notify IssueToPR
+                  api("POST", f"/statuses/{head_sha}", {
+                      "state": "failure",
+                      "context": "software-factory/review",
+                      "description": f"Auto-repair needed: {reasons[0][:100]}"
+                  })
+
+                  reasons_md = "\n".join([f"- {r}" for r in reasons])
+                  api("POST", f"/issues/{pr_num}/comments", {
+                      "body": f"### 🔄 Automated Healing Loop Triggered (Attempt {new_attempt}/3)\n\n"
+                              f"The factory detected the following issue(s) on commit `{head_sha[:7]}`:\n\n"
+                              f"{reasons_md}\n\n"
+                              f"**Action Taken:**\n"
+                              f"- Flagged `software-factory/review` as `failure`.\n"
+                              f"- OpenHands will check out `{branch}` and revise the PR."
+                  })
           EOF

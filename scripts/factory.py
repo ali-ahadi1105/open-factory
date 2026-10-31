@@ -52,6 +52,7 @@ STATIONS = (
     "github-stale-ci-pr-closer",
     "qa-changes",
     "github-phase-orchestrator",
+    "github-pr-healer",
 )
 TERMINAL = {"COMPLETED", "FAILED", "CANCELLED", "SKIPPED"}
 # Every station carries this tag, so the Automations list can filter to the factory.
@@ -779,6 +780,74 @@ def factory_graph(args) -> dict:
     return all_results
 
 
+def factory_heal(args) -> dict:
+    """Diagnose open factory PRs and trigger automatic repair on CI or review failures."""
+    from github_client import GitHubClient
+    from healer import scan_and_heal
+
+    client = GitHubClient()
+    repos = _split(args.repos)
+    all_results = {}
+    for repo in repos:
+        try:
+            res = scan_and_heal(
+                repo=repo,
+                client=client,
+                branch_prefix=getattr(args, "branch_prefix", "openhands/issue"),
+                max_retries=getattr(args, "max_retries", 3),
+                dry_run=getattr(args, "dry_run", False),
+            )
+            all_results[repo] = res
+        except Exception as err:
+            raise FactoryError(f"Healing scan failed on {repo}: {err}") from err
+    return all_results
+
+
+def factory_watch(args) -> dict:
+    """Continuously monitor repositories, advance unblocked phases, and auto-heal failing PRs."""
+    from github_client import GitHubClient
+    from orchestrator import check_and_transition
+    from healer import scan_and_heal
+
+    client = GitHubClient()
+    repos = _split(args.repos)
+    interval = getattr(args, "interval", 30)
+    print(f"Starting autonomous software factory watcher on {', '.join(repos)} (interval: {interval}s)...")
+    try:
+        while True:
+            for repo in repos:
+                # 1. Advance phases
+                trans_res = check_and_transition(
+                    repo=repo,
+                    client=client,
+                    trigger_label=getattr(args, "trigger_label", "openhands"),
+                    blocked_label=getattr(args, "blocked_label", "blocked"),
+                )
+                if trans_res["transitions_count"] > 0:
+                    print(f"[{time.strftime('%X')}] [{repo}] Unblocked {trans_res['transitions_count']} phase(s):")
+                    for t in trans_res["transitions"]:
+                        print(f"  - Issue #{t['issue_number']}: {t['title']}")
+
+                # 2. Auto-heal PRs (CI failures & review change requests)
+                heal_res = scan_and_heal(
+                    repo=repo,
+                    client=client,
+                    branch_prefix=getattr(args, "branch_prefix", "openhands/issue"),
+                    max_retries=getattr(args, "max_retries", 3),
+                )
+                if heal_res["healed"] > 0 or heal_res["escalated"] > 0:
+                    print(f"[{time.strftime('%X')}] [{repo}] Healer: {heal_res['healed']} healed, {heal_res['escalated']} escalated")
+                    for r in heal_res["results"]:
+                        action = r["outcome"]["action"]
+                        if action != "none":
+                            print(f"  - PR #{r['pr']}: {action} (attempt {r['diagnosis']['attempt']}) - {r['diagnosis']['status']}")
+
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\nWatcher stopped by user.")
+    return {"status": "stopped"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -816,7 +885,7 @@ def main() -> int:
     p = sub.add_parser("reset-token")
     p.set_defaults(func=reset_token)
 
-    # --- New Autonomous Software Factory Commands ---
+    # --- Autonomous Software Factory Commands ---
     p = sub.add_parser("plan", help="Break specification into phased GitHub issues with dependencies")
     p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
     p.add_argument("--spec", help="Specification text")
@@ -834,7 +903,23 @@ def main() -> int:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=factory_orchestrate)
 
-    p = sub.add_parser("install-orchestrator", help="Install GitHub Actions phase orchestrator workflow")
+    p = sub.add_parser("heal", help="Diagnose PRs and trigger automatic repair on CI or review failures")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.add_argument("--branch-prefix", default="openhands/issue")
+    p.add_argument("--max-retries", type=int, default=3)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=factory_heal)
+
+    p = sub.add_parser("watch", help="Continuously monitor repository: advance phases AND heal failing PRs")
+    p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
+    p.add_argument("--interval", type=int, default=30)
+    p.add_argument("--branch-prefix", default="openhands/issue")
+    p.add_argument("--trigger-label", default="openhands")
+    p.add_argument("--blocked-label", default="blocked")
+    p.add_argument("--max-retries", type=int, default=3)
+    p.set_defaults(func=factory_watch)
+
+    p = sub.add_parser("install-orchestrator", help="Install GitHub Actions phase orchestrator & auto-healer workflow")
     p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
     p.add_argument("--branch", default="main", help="Target branch (default: main)")
     p.set_defaults(func=factory_install_orchestrator)

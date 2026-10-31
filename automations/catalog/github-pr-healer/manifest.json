@@ -1,0 +1,88 @@
+{
+  "id": "github-pr-healer",
+  "version": "1.0.0",
+  "name": "GitHub PR auto-healer & feedback loop",
+  "category": "Code review",
+  "description": "Monitors pull requests, detects CI test failures or review change requests, and automatically triggers an iterative repair revision loop.",
+  "requires": {
+    "integrations": {},
+    "features": [
+      "customTarball"
+    ]
+  },
+  "estimatedSetupMinutes": 2,
+  "exampleImplementation": "A deterministic scheduled scanner checks all open factory PRs. If required CI checks fail or reviewers request changes, it flags the PR and requests an autonomous revision task to heal the branch.",
+  "setup": {
+    "version": "1.0",
+    "mode": "direct",
+    "form": {
+      "triggers": {
+        "cron": {
+          "schedule": {
+            "type": "cron",
+            "label": "Check frequency",
+            "help": "How often to scan PRs for CI failures or review comments.",
+            "default": "*/5 * * * *",
+            "required": true
+          },
+          "timezone": {
+            "type": "timezone",
+            "label": "Timezone",
+            "help": "Timezone for the schedule.",
+            "default": "UTC",
+            "required": true
+          }
+        }
+      },
+      "args": {
+        "repositories": {
+          "type": "repo-picker",
+          "provider": "github",
+          "multiple": true,
+          "label": "Repositories",
+          "help": "Repositories this auto-healer monitors.",
+          "required": true
+        },
+        "githubTokenSecret": {
+          "type": "text",
+          "label": "GitHub token secret",
+          "help": "Name of a saved Agent Server secret.",
+          "default": "GITHUB_PERSONAL_ACCESS_TOKEN",
+          "required": true
+        },
+        "branchPrefix": {
+          "type": "text",
+          "label": "Branch prefix",
+          "help": "Branch prefix for factory PRs to heal.",
+          "default": "openhands/issue",
+          "required": true
+        },
+        "maxRetries": {
+          "type": "number",
+          "label": "Maximum auto-repair attempts",
+          "help": "Number of times to attempt automatic fixing before escalating to human attention.",
+          "default": 3,
+          "required": true
+        }
+      }
+    },
+    "bundle": {
+      "version": "1.0.0",
+      "entrypoint": "python3 worker.py",
+      "timeout": 300,
+      "files": {
+        "worker.py": "automations/catalog/github-pr-healer/worker.py",
+        "github_client.py": "scripts/github_client.py",
+        "healer.py": "scripts/healer.py"
+      },
+      "config": {
+        "repos": "{{form.repositories}}",
+        "github_token_secret": "{{form.githubTokenSecret}}",
+        "branch_prefix": "{{form.branchPrefix}}",
+        "max_retries": "{{form.maxRetries}}"
+      }
+    },
+    "message": "Configure the repositories, token secret, branch prefix, and max retries."
+  },
+  "popularityRank": 88
+}

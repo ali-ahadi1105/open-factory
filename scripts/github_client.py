@@ -160,6 +160,45 @@ class GitHubClient:
     def get_pull(self, repo: str, number: int) -> dict:
         return self.request("GET", f"/repos/{repo}/pulls/{number}")
 
+    def list_reviews(self, repo: str, number: int) -> list[dict]:
+        return self.paginate(f"/repos/{repo}/pulls/{number}/reviews")
+
+    def list_review_comments(self, repo: str, number: int) -> list[dict]:
+        return self.paginate(f"/repos/{repo}/pulls/{number}/comments")
+
+    # --- CI Checks, Actions & Commit Statuses ---
+
+    def get_check_runs(self, repo: str, commit_sha: str) -> list[dict]:
+        res = self.request("GET", f"/repos/{repo}/commits/{commit_sha}/check-runs")
+        return res.get("check_runs", []) if isinstance(res, dict) else []
+
+    def get_commit_statuses(self, repo: str, commit_sha: str) -> list[dict]:
+        res = self.request("GET", f"/repos/{repo}/commits/{commit_sha}/statuses")
+        return res if isinstance(res, list) else []
+
+    def create_commit_status(
+        self,
+        repo: str,
+        commit_sha: str,
+        state: str,
+        context: str,
+        description: str = "",
+        target_url: str = "",
+    ) -> dict:
+        """Create a commit status (state: error, failure, pending, success)."""
+        payload: dict[str, Any] = {
+            "state": state,
+            "context": context,
+            "description": description[:140],
+        }
+        if target_url:
+            payload["target_url"] = target_url
+        return self.request("POST", f"/repos/{repo}/statuses/{commit_sha}", body=payload)
+
+    def list_workflow_runs_for_commit(self, repo: str, commit_sha: str) -> list[dict]:
+        res = self.request("GET", f"/repos/{repo}/actions/runs", params={"head_sha": commit_sha})
+        return res.get("workflow_runs", []) if isinstance(res, dict) else []
+
     # --- Repository & Files ---
 
     def get_repo(self, repo: str) -> dict:

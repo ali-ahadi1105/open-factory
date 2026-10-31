@@ -309,11 +309,13 @@ jobs:
 def install_orchestrator_workflow(repo: str, client: GitHubClient, branch: str = "main") -> dict[str, Any]:
     """Commit the GitHub Actions orchestrator workflow into the target repository."""
     workflow_path = ".github/workflows/factory-orchestrator.yml"
-    commit_msg = "ci: install Software Factory automated phase orchestrator workflow"
+    commit_msg = "ci: install Software Factory automated phase orchestrator and auto-healer workflow"
+    template_file = Path(__file__).resolve().parent.parent / "templates" / "factory-orchestrator.yml"
+    content = template_file.read_text(encoding="utf-8") if template_file.is_file() else GITHUB_ACTION_WORKFLOW_TEMPLATE
     result = client.create_or_update_file(
         repo=repo,
         path=workflow_path,
-        content=GITHUB_ACTION_WORKFLOW_TEMPLATE,
+        content=content,
         commit_message=commit_msg,
         branch=branch,
     )
@@ -335,11 +337,13 @@ def main() -> int:
     p_run.add_argument("--blocked-label", default="blocked", help="Blocked label (default: blocked)")
     p_run.add_argument("--dry-run", action="store_true", help="Check without modifying labels or commenting")
 
-    p_watch = sub.add_parser("watch", help="Continuously poll repository and transition phases")
+    p_watch = sub.add_parser("watch", help="Continuously poll repository, transition phases, and auto-heal PRs")
     p_watch.add_argument("--repos", required=True, help="Target GitHub repository (owner/repo)")
     p_watch.add_argument("--interval", type=int, default=30, help="Polling interval in seconds (default: 30)")
     p_watch.add_argument("--trigger-label", default="openhands")
     p_watch.add_argument("--blocked-label", default="blocked")
+    p_watch.add_argument("--branch-prefix", default="openhands/issue")
+    p_watch.add_argument("--max-retries", type=int, default=3)
 
     p_graph = sub.add_parser("graph", help="Render status of all software factory issues in repo")
     p_graph.add_argument("--repos", required=True, help="Target GitHub repository (owner/repo)")
@@ -362,8 +366,10 @@ def main() -> int:
             )
             print(json.dumps(res, indent=2))
         elif args.command == "watch":
-            print(f"Starting Software Factory orchestrator watcher on {args.repos} (interval {args.interval}s)...")
+            from healer import scan_and_heal
+            print(f"Starting Software Factory orchestrator & healer watcher on {args.repos} (interval {args.interval}s)...")
             while True:
+                # 1. Advance phases
                 res = check_and_transition(
                     repo=args.repos,
                     client=client,
@@ -374,6 +380,17 @@ def main() -> int:
                     print(f"[{time.strftime('%X')}] Transitioned {res['transitions_count']} issue(s):")
                     for t in res["transitions"]:
                         print(f"  - Issue #{t['issue_number']}: {t['title']} (unblocked)")
+
+                # 2. Auto-heal PRs
+                heal_res = scan_and_heal(
+                    repo=args.repos,
+                    client=client,
+                    branch_prefix=args.branch_prefix,
+                    max_retries=args.max_retries,
+                )
+                if heal_res["healed"] > 0 or heal_res["escalated"] > 0:
+                    print(f"[{time.strftime('%X')}] Healer: {heal_res['healed']} healed, {heal_res['escalated']} escalated")
+
                 time.sleep(args.interval)
         elif args.command == "graph":
             res = get_pipeline_graph(repo=args.repos, client=client)
