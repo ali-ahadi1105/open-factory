@@ -679,6 +679,7 @@ def _split(text: str) -> list[str]:
 
 def factory_plan(args) -> dict:
     """Break requirements down into phased issues with automated dependencies."""
+    from github_client import GitHubClient
     from planner import execute_plan, parse_json_plan, parse_markdown_spec
 
     content = ""
