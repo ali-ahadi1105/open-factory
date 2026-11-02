@@ -164,6 +164,9 @@ class MockHealerGitHubClient(MockGitHubClient):
     def list_review_comments(self, repo: str, number: int):
         return self._comments
 
+    def list_comments(self, repo: str, number: int):
+        return []
+
     def create_commit_status(self, repo: str, commit_sha: str, state: str, context: str, description: str = "", target_url: str = ""):
         self.statuses_log.append({"sha": commit_sha, "state": state, "context": context, "description": description})
         return {"state": state, "context": context}
@@ -253,6 +256,54 @@ class TestHealer(unittest.TestCase):
         # Check escalation label was added
         added_labels = [a[2] for a in client.actions_log if a[0] == "add_labels"]
         self.assertTrue(any(ESCALATION_LABEL in l for l in added_labels))
+
+    def test_diagnose_and_heal_approved_with_historical_comments(self):
+        from healer import diagnose_pr, heal_pr
+
+        pr = {
+            "number": 42,
+            "head": {"sha": "abc1234", "ref": "openhands/issue-42"},
+            "labels": [{"name": "fix-attempt:2"}, {"name": "openhands-fix"}],
+        }
+        mock_checks = [
+            {"name": "software-factory-orchestrator", "status": "completed", "conclusion": "success"},
+        ]
+        mock_reviews = [
+            {
+                "commit_id": "abc1234",
+                "user": {"login": "ai-reviewer"},
+                "state": "COMMENTED",
+                "body": "### Verdict\n\n✅ **APPROVED**\n\nAll requirements have been met.",
+            }
+        ]
+        # Historical review comments from older commit
+        mock_comments = [
+            {
+                "commit_id": "abc1234",
+                "original_commit_id": "old_sha",
+                "path": "src/App.tsx",
+                "body": "Older comment from previous review",
+                "user": {"login": "ai-reviewer"},
+            }
+        ]
+        client = MockHealerGitHubClient(
+            issues=[{"number": 42, "labels": [{"name": "fix-attempt:2"}]}],
+            check_runs=mock_checks,
+            reviews=mock_reviews,
+            comments=mock_comments,
+        )
+        diag = diagnose_pr("owner/repo", pr, client)
+        self.assertEqual(diag.status, "HEALTHY")
+        self.assertEqual(len(diag.reasons), 0)
+
+        outcome = heal_pr("owner/repo", pr, diag, client, max_retries=3)
+        self.assertEqual(outcome["status"], "HEALTHY")
+
+        # Verify commit statuses software-factory/review and software-factory/tests were set to success
+        review_statuses = [s for s in client.statuses_log if s["context"] == "software-factory/review"]
+        self.assertTrue(any(s["state"] == "success" for s in review_statuses))
+        test_statuses = [s for s in client.statuses_log if s["context"] == "software-factory/tests"]
+        self.assertTrue(any(s["state"] == "success" for s in test_statuses))
 
 
 if __name__ == "__main__":

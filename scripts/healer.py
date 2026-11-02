@@ -40,15 +40,26 @@ class PRDiagnosis:
     reviews_feedback: list[dict[str, Any]] = field(default_factory=list)
 
 
-def extract_attempt_count(labels: list[str]) -> int:
+def extract_attempt_count(labels: list[str], comments: list[dict[str, Any]] | None = None, head_sha: str | None = None) -> int:
+    attempt = 0
     for lbl in labels:
         m = ATTEMPT_LABEL_RE.match(lbl)
         if m:
             try:
-                return int(m.group(1))
+                attempt = int(m.group(1))
+                break
             except ValueError:
                 pass
-    return 0
+
+    # If new commit was pushed since the last recorded heal comment, reset attempt count to 0
+    if attempt > 0 and comments and head_sha:
+        for c in reversed(comments):
+            b = c.get("body") or ""
+            if "Automated Healing & Revision Triggered" in b or "Automated Repair Limit Reached" in b:
+                if head_sha[:7] not in b:
+                    return 0
+                break
+    return attempt
 
 
 def diagnose_pr(repo: str, pr: dict[str, Any], client: GitHubClient) -> PRDiagnosis:
@@ -58,17 +69,25 @@ def diagnose_pr(repo: str, pr: dict[str, Any], client: GitHubClient) -> PRDiagno
 
     raw_labels = pr.get("labels", [])
     labels = [l.get("name", "") if isinstance(l, dict) else str(l) for l in raw_labels]
-    attempt = extract_attempt_count(labels)
 
+    # Fetch issue comments to inspect both attempt resets and gate blockers
+    issue_comments: list[dict[str, Any]] = []
+    try:
+        issue_comments = client.list_comments(repo, number)
+    except GitHubError:
+        pass
+
+    attempt = extract_attempt_count(labels, issue_comments, head_sha)
+
+    # Check if escalation happened on the current head commit
+    escalation_on_current_head = False
     if ESCALATION_LABEL in labels:
-        return PRDiagnosis(
-            pr_number=number,
-            head_sha=head_sha,
-            branch=branch,
-            status="EXHAUSTED",
-            attempt_count=attempt,
-            reasons=["Already escalated to human developer."],
-        )
+        for c in reversed(issue_comments):
+            b = c.get("body") or ""
+            if "Automated Repair Limit Reached" in b:
+                if head_sha[:7] in b:
+                    escalation_on_current_head = True
+                break
 
     reasons: list[str] = []
     failed_checks: list[dict[str, Any]] = []
@@ -122,6 +141,7 @@ def diagnose_pr(repo: str, pr: dict[str, Any], client: GitHubClient) -> PRDiagno
         pass
 
     # 3. Inspect PR Reviews (Latest review per reviewer)
+    has_approved_review = False
     try:
         reviews = client.list_reviews(repo, number)
         latest_by_user: dict[str, dict[str, Any]] = {}
@@ -132,9 +152,48 @@ def diagnose_pr(repo: str, pr: dict[str, Any], client: GitHubClient) -> PRDiagno
         for user, r in latest_by_user.items():
             state = r.get("state")
             body = (r.get("body") or "").strip()
-            if state == "CHANGES_REQUESTED":
+            body_lower = body.lower()
+            commit_id = r.get("commit_id")
+
+            # Check if this review explicitly approved (by state or by verdict in body)
+            is_approved = (
+                state == "APPROVED"
+                or bool(re.search(r"(?:verdict\s*[:\n]+.*?)?(?:✅\s*\*\*approved\*\*|✅\s*approved|\bverdict:\s*approved\b)", body, re.IGNORECASE))
+                or ("code assessment: clean" in body_lower and "merge readiness: ready" in body_lower)
+            )
+
+            is_changes_requested = (
+                not is_approved
+                and (
+                    state == "CHANGES_REQUESTED"
+                    or (
+                        state in ("COMMENTED", "CHANGES_REQUESTED")
+                        and any(
+                            phrase in body_lower
+                            for phrase in (
+                                "changes requested",
+                                "changes_requested",
+                                "blocking",
+                                "needs changes",
+                                "action required",
+                                "configuration issue (blocking)",
+                            )
+                        )
+                    )
+                )
+            )
+
+            if is_approved:
+                if commit_id == head_sha or not commit_id:
+                    has_approved_review = True
+                continue
+
+            if is_changes_requested:
                 desc = f"Reviewer @{user} requested changes"
-                if body:
+                m = re.search(r"(\*\*🔄 CHANGES REQUESTED\*\*.*?)(?:\n\n|\Z)", body, re.DOTALL | re.IGNORECASE)
+                if m:
+                    desc += f": {m.group(1).strip()[:200]}"
+                elif body:
                     desc += f": {body[:200]}"
                 reasons.append(desc)
                 reviews_feedback.append({
@@ -149,27 +208,45 @@ def diagnose_pr(repo: str, pr: dict[str, Any], client: GitHubClient) -> PRDiagno
     # 4. Inspect Review Comments (Inline code comments)
     try:
         comments = client.list_review_comments(repo, number)
-        # Check comments on the current head commit
-        recent_comments = [c for c in comments if c.get("commit_id") == head_sha or not c.get("commit_id")]
-        if recent_comments and not reviews_feedback and not failed_checks:
-            # If review comments exist on this head without an explicit approval
-            c_summaries = []
-            for c in recent_comments[-3:]:
-                u = (c.get("user") or {}).get("login", "user")
-                p = c.get("path", "")
-                b = (c.get("body") or "").strip()
-                c_summaries.append(f"Comment by @{u} on `{p}`: {b[:120]}")
-            if c_summaries:
-                reasons.extend(c_summaries)
-                reviews_feedback.extend(recent_comments)
+        # Check comments only if there is no approved review on this commit,
+        # and only look at comments originally authored on this exact head commit.
+        if not has_approved_review and not reviews_feedback and not failed_checks:
+            recent_comments = [
+                c for c in comments
+                if (c.get("original_commit_id") == head_sha or (not c.get("original_commit_id") and c.get("commit_id") == head_sha))
+            ]
+            if recent_comments:
+                c_summaries = []
+                for c in recent_comments[-3:]:
+                    u = (c.get("user") or {}).get("login", "user")
+                    p = c.get("path", "")
+                    b = (c.get("body") or "").strip()
+                    c_summaries.append(f"Comment by @{u} on `{p}`: {b[:120]}")
+                if c_summaries:
+                    reasons.extend(c_summaries)
+                    reviews_feedback.extend(recent_comments)
     except GitHubError:
         pass
 
+    # 4b. Inspect Issue Comments for Reviewer Gate Blockers
+    for ic in issue_comments[-5:]:
+        ic_body = (ic.get("body") or "").strip()
+        if "review paused: current-head checks did not pass" in ic_body.lower():
+            if head_sha[:7] in ic_body or head_sha[:12] in ic_body:
+                msg = f"Review gate paused on `{head_sha[:7]}`: checks did not pass"
+                if not any(fc.get("name") == "review-gate" for fc in failed_checks):
+                    reasons.append(msg)
+                    failed_checks.append({
+                        "name": "review-gate",
+                        "conclusion": "failure",
+                        "details": ic_body[:300],
+                    })
+
     # Determine overall status
     if failed_checks:
-        status = "CI_FAILED"
+        status = "EXHAUSTED" if escalation_on_current_head else "CI_FAILED"
     elif reviews_feedback:
-        status = "CHANGES_REQUESTED"
+        status = "EXHAUSTED" if escalation_on_current_head else "CHANGES_REQUESTED"
     elif is_pending:
         status = "PENDING"
     else:
@@ -203,19 +280,41 @@ def heal_pr(
     labels = [l.get("name", "") if isinstance(l, dict) else str(l) for l in raw_labels]
 
     if diagnosis.status in ("HEALTHY", "PENDING", "EXHAUSTED"):
-        # If PR became healthy on this SHA, cleanup any temporary attempt labels
-        if diagnosis.status == "HEALTHY" and (any(ATTEMPT_LABEL_RE.match(l) for l in labels) or "openhands-fix" in labels):
+        # If PR became healthy on this SHA, cleanup any temporary attempt labels and set statuses to success
+        if diagnosis.status == "HEALTHY":
             if not dry_run:
+                had_fix_labels = any(ATTEMPT_LABEL_RE.match(l) for l in labels) or any(l in ("openhands-fix", ESCALATION_LABEL) for l in labels)
                 for l in labels:
-                    if ATTEMPT_LABEL_RE.match(l) or l == "openhands-fix":
-                        client.remove_label(repo, number, l)
-                client.create_comment(
-                    repo,
-                    number,
-                    f"### ✅ All Verifications Passed!\n\n"
-                    f"All CI checks and reviews are now passing on commit `{head_sha[:7]}`.\n"
-                    f"The pull request is clean and ready for automatic merge."
+                    if ATTEMPT_LABEL_RE.match(l) or l in ("openhands-fix", ESCALATION_LABEL):
+                        try:
+                            client.remove_label(repo, number, l)
+                        except Exception:
+                            pass
+
+                # Flag commit statuses as success for github-delivery-watchdog and GitHub UI
+                client.create_commit_status(
+                    repo=repo,
+                    commit_sha=head_sha,
+                    state="success",
+                    context="software-factory/review",
+                    description="Review passed: all criteria met",
                 )
+                client.create_commit_status(
+                    repo=repo,
+                    commit_sha=head_sha,
+                    state="success",
+                    context="software-factory/tests",
+                    description="CI tests passing",
+                )
+
+                if had_fix_labels:
+                    client.create_comment(
+                        repo,
+                        number,
+                        f"### ✅ All Verifications Passed!\n\n"
+                        f"All CI checks and reviews are now passing on commit `{head_sha[:7]}`.\n"
+                        f"The pull request is clean and ready for automatic merge."
+                    )
         return {
             "pr": number,
             "status": diagnosis.status,
@@ -272,13 +371,13 @@ def heal_pr(
                 client.remove_label(repo, number, l)
         client.add_labels(repo, number, [f"fix-attempt:{new_attempt}", "openhands-fix"])
 
-        # Set commit status to failure to notify OpenHands IssueToPR worker
+        clean_desc = re.sub(r"[\U00010000-\U0010ffff]", "", f"Auto-repair needed: {diagnosis.reasons[0]}").replace("*", "").strip()[:140]
         client.create_commit_status(
             repo=repo,
             commit_sha=head_sha,
             state="failure",
             context="software-factory/review",
-            description=f"Auto-repair needed: {diagnosis.reasons[0][:100]}",
+            description=clean_desc,
         )
         if diagnosis.status == "CI_FAILED":
             client.create_commit_status(
