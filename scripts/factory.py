@@ -849,6 +849,21 @@ def factory_watch(args) -> dict:
     return {"status": "stopped"}
 
 
+def factory_dashboard(args) -> dict:
+    """Launch the Web Dashboard for autonomous software factory management."""
+    port = getattr(args, "port", 8080)
+    host = getattr(args, "host", "0.0.0.0")
+    dashboard_app = LOCAL_ROOT / "dashboard" / "app.py"
+    cmd = [
+        "uv", "run", "--with", "fastapi", "--with", "uvicorn",
+        "python3", str(dashboard_app),
+    ]
+    env = {**os.environ, "PORT": str(port), "HOST": host}
+    print(f"🚀 Launching Software Factory Web Dashboard on http://localhost:{port} ...")
+    subprocess.run(cmd, env=env)
+    return {"status": "stopped"}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -928,6 +943,11 @@ def main() -> int:
     p = sub.add_parser("graph", help="Show all factory issues and their dependency status")
     p.add_argument("--repos", required=True, help="Target repositories (owner/repo)")
     p.set_defaults(func=factory_graph)
+
+    p = sub.add_parser("dashboard", help="Launch interactive Web Dashboard and visualizer")
+    p.add_argument("--port", type=int, default=8080, help="Port to listen on (default: 8080)")
+    p.add_argument("--host", default="0.0.0.0", help="Host interface (default: 0.0.0.0)")
+    p.set_defaults(func=factory_dashboard)
 
     args = parser.parse_args()
     try:
