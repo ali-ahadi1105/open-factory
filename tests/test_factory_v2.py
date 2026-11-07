@@ -306,5 +306,43 @@ class TestHealer(unittest.TestCase):
         self.assertTrue(any(s["state"] == "success" for s in test_statuses))
 
 
+class TestDashboardAccounts(unittest.TestCase):
+    def test_account_activation_and_switching(self):
+        import tempfile
+        import os
+        from unittest.mock import patch
+
+        try:
+            import fastapi
+        except ImportError:
+            raise unittest.SkipTest("fastapi not installed in current environment")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            acc_file = Path(tmpdir) / "accounts.json"
+            sample_accounts = [
+                {"login": "user-a", "token": "ghp_tokenA12345", "name": "User A", "is_active": True},
+                {"login": "user-b", "token": "ghp_tokenB67890", "name": "User B", "is_active": False},
+            ]
+            acc_file.write_text(json.dumps(sample_accounts))
+
+            sys.path.insert(0, str(Path(__file__).parent.parent))
+            import dashboard.app
+            with patch.object(dashboard.app, "ACCOUNTS_FILE", acc_file):
+                from dashboard.app import load_accounts, get_active_account, get_client
+
+                accounts = load_accounts()
+                self.assertEqual(len(accounts), 2)
+
+                active = get_active_account()
+                self.assertIsNotNone(active)
+                self.assertEqual(active["login"], "user-a")
+
+                client_a = get_client()
+                self.assertEqual(client_a.token, "ghp_tokenA12345")
+
+                client_b = get_client(account_login="user-b")
+                self.assertEqual(client_b.token, "ghp_tokenB67890")
+
+
 if __name__ == "__main__":
     unittest.main()

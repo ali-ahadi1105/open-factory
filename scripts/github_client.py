@@ -31,6 +31,13 @@ def get_token() -> str:
         or os.environ.get("GITHUB_TOKEN")
     )
     if not token:
+        try:
+            import subprocess
+            res = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True)
+            token = res.stdout.strip()
+        except Exception:
+            pass
+    if not token:
         raise GitHubError("No GitHub token found in GITHUB_PERSONAL_ACCESS_TOKEN, GH_TOKEN, or GITHUB_TOKEN")
     return token.strip()
 
@@ -151,6 +158,9 @@ class GitHubClient:
 
     def create_comment(self, repo: str, number: int, body: str) -> dict:
         return self.request("POST", f"/repos/{repo}/issues/{number}/comments", body={"body": body})
+
+    def list_comments(self, repo: str, number: int) -> list[dict]:
+        return self.paginate(f"/repos/{repo}/issues/{number}/comments")
 
     # --- Pull Requests ---
 

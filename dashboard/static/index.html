@@ -86,14 +86,23 @@
         </div>
       </div>
 
-      <!-- System Health Pills -->
+      <!-- System Health Pills & Account Management -->
       <div class="flex items-center gap-3">
-        <!-- GitHub Pill -->
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 border border-white/5 text-xs">
-          <span class="w-2.5 h-2.5 rounded-full" :class="systemStatus.github?.connected ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-rose-400'"></span>
-          <i data-lucide="github" class="w-4 h-4 text-slate-300"></i>
-          <span x-text="systemStatus.github?.connected ? '@' + systemStatus.github.user?.login : 'GitHub disconnected'"></span>
-        </div>
+        <!-- GitHub Account Button & Status -->
+        <button type="button" @click="openAccountsModal()" 
+                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-brand-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
+          <template x-if="activeAccount && activeAccount.avatar_url">
+            <img :src="activeAccount.avatar_url" class="w-4 h-4 rounded-full ring-1 ring-white/20">
+          </template>
+          <template x-if="!activeAccount || !activeAccount.avatar_url">
+            <i data-lucide="github" class="w-4 h-4 text-slate-300"></i>
+          </template>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full" :class="systemStatus.github?.connected ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-rose-400'"></span>
+            <span class="font-medium text-slate-200" x-text="activeAccount ? '@' + activeAccount.login : (systemStatus.github?.user?.login ? '@' + systemStatus.github.user.login : 'اتصال گیت‌هاب')"></span>
+          </div>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 group-hover:bg-brand-500/30">اکانت‌ها</span>
+        </button>
 
         <!-- OpenHands Server Pill -->
         <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 border border-white/5 text-xs">
@@ -148,12 +157,45 @@
           </p>
         </div>
 
+        <!-- Target GitHub Account Selector -->
+        <div class="p-4 rounded-xl bg-dark-800/60 border border-white/5 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <i data-lucide="user-check" class="w-4 h-4 text-brand-400"></i>
+              <span>اکانت گیت‌هاب مالک مخزن (GitHub Owner Account):</span>
+            </label>
+            <button type="button" @click="openAccountsModal()" class="text-[11px] text-brand-400 hover:text-brand-300 flex items-center gap-1 transition">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <span>افزودن اکانت جدید</span>
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            <template x-for="acc in accounts" :key="acc.login">
+              <div @click="selectAccountForLaunch(acc.login)"
+                   class="p-2.5 rounded-xl border text-xs cursor-pointer flex items-center gap-2.5 transition-all"
+                   :class="launchForm.account_login === acc.login 
+                     ? 'bg-brand-600/20 border-brand-500 text-white shadow-sm shadow-brand-500/10' 
+                     : 'bg-dark-800 hover:bg-dark-700 border-white/5 text-slate-400 hover:text-slate-200'">
+                <img :src="acc.avatar_url" class="w-6 h-6 rounded-full shrink-0 border border-white/10">
+                <div class="flex-1 min-w-0">
+                  <div class="font-bold truncate text-white" x-text="'@' + acc.login"></div>
+                  <div class="text-[10px] text-slate-400 truncate" x-text="acc.label || acc.name"></div>
+                </div>
+                <template x-if="launchForm.account_login === acc.login">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-brand-400 shrink-0"></i>
+                </template>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <!-- Repository Name & Visibility -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="md:col-span-2">
             <label class="block text-xs font-semibold text-slate-300 mb-1.5">نام مخزن در گیت‌هاب (Repository Name)</label>
             <div class="relative flex items-center" dir="ltr">
-              <span class="absolute left-3 text-xs text-slate-500 select-none" x-text="systemStatus.github?.user?.login ? systemStatus.github.user.login + '/' : 'owner/'"></span>
+              <span class="absolute left-3 text-xs text-slate-500 select-none font-mono" x-text="(launchForm.account_login || (activeAccount ? activeAccount.login : (systemStatus.github?.user?.login || 'owner'))) + '/'"></span>
               <input type="text" x-model="launchForm.repo_name" 
                      placeholder="my-awesome-project" 
                      class="w-full bg-dark-800 border border-white/10 rounded-xl py-2.5 pr-4 pl-36 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
@@ -463,6 +505,156 @@
     </div>
   </div>
 
+  <!-- Accounts Management Modal -->
+  <div x-show="showAccountsModal" x-cloak class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="glass max-w-2xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-white/10 my-8 shadow-2xl" @click.outside="showAccountsModal = false">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+            <i data-lucide="github" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-white">مدیریت اکانت‌ها و توکن‌های گیت‌هاب (GitHub Accounts)</h3>
+            <p class="text-xs text-slate-400">می‌توانید توکن‌های Personal Access Token را برای حساب‌های مختلف ثبت و اکانت فعال را جابجا کنید.</p>
+          </div>
+        </div>
+        <button @click="showAccountsModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Configured Accounts List -->
+      <div class="flex flex-col gap-3">
+        <label class="text-xs font-semibold text-slate-300">اکانت‌های متصل شده:</label>
+        <div class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
+          <template x-for="acc in accounts" :key="acc.login">
+            <div class="p-3 rounded-xl bg-dark-800/80 border border-white/10 flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-3">
+                <img :src="acc.avatar_url" class="w-9 h-9 rounded-full border border-white/10 shrink-0">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm text-white" x-text="'@' + acc.login"></span>
+                    <template x-if="acc.is_active">
+                      <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        اکانت فعال
+                      </span>
+                    </template>
+                  </div>
+                  <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                    <span x-text="acc.name"></span>
+                    <span class="text-slate-600">•</span>
+                    <span class="font-mono text-[11px] text-slate-500" x-text="acc.masked_token"></span>
+                    <template x-if="acc.label">
+                      <span class="px-1.5 py-0.2 rounded bg-dark-700 text-[10px] text-slate-300" x-text="acc.label"></span>
+                    </template>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button type="button" @click="testAccount(acc.login)" :disabled="testingAccountLogin === acc.login"
+                        class="px-2.5 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-xs text-slate-300 hover:text-white flex items-center gap-1 transition">
+                  <template x-if="testingAccountLogin !== acc.login">
+                    <i data-lucide="check" class="w-3.5 h-3.5 text-slate-400"></i>
+                  </template>
+                  <template x-if="testingAccountLogin === acc.login">
+                    <div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  </template>
+                  <span>تست اتصال</span>
+                </button>
+
+                <template x-if="!acc.is_active">
+                  <button type="button" @click="activateAccount(acc.login)"
+                          class="px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white transition">
+                    انتخاب فعال
+                  </button>
+                </template>
+
+                <button type="button" @click="deleteAccount(acc.login)"
+                        class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                        title="حذف اکانت">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="accounts.length === 0">
+            <div class="p-4 rounded-xl bg-dark-800/50 border border-dashed border-white/10 text-center text-xs text-slate-400">
+              هنوز اکانتی ثبت نشده است. لطفاً توکن گیت‌هاب خود را در فرم زیر وارد کنید.
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Add Account Form -->
+      <div class="p-4 rounded-xl bg-dark-800 border border-brand-500/30 flex flex-col gap-3">
+        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <i data-lucide="key" class="w-4 h-4 text-brand-400"></i>
+          <span>افزودن اکانت یا توکن گیت‌هاب جدید:</span>
+        </h4>
+
+        <div class="flex flex-col gap-1.5">
+          <label class="text-[11px] font-semibold text-slate-300">توکن دسترسی شخصی (GitHub Personal Access Token)</label>
+          <div class="relative flex items-center" dir="ltr">
+            <input :type="showTokenInput ? 'text' : 'password'" x-model="newAccountForm.token"
+                   placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_..."
+                   class="w-full bg-dark-900 border border-white/10 rounded-xl py-2.5 pl-3 pr-10 font-mono text-xs text-white focus:outline-none focus:border-brand-500">
+            <button type="button" @click="showTokenInput = !showTokenInput" 
+                    class="absolute right-2 text-slate-400 hover:text-slate-200 p-1">
+              <i :data-lucide="showTokenInput ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <p class="text-[10px] text-slate-400 leading-normal">
+            توکن حداقل نیازمند دسترسی‌های <code class="text-brand-300 bg-white/5 px-1 py-0.5 rounded">repo</code> و <code class="text-brand-300 bg-white/5 px-1 py-0.5 rounded">workflow</code> می‌باشد. 
+            (<a href="https://github.com/settings/tokens" target="_blank" class="text-brand-400 hover:underline">ایجاد توکن جدید در گیت‌هاب</a>)
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="text-[11px] font-semibold text-slate-300 mb-1 block">برچسب / نام مستعار (اختیاری)</label>
+            <input type="text" x-model="newAccountForm.label" placeholder="مثلاً: اکانت شرکتی، بات دیپلوی، شخصی"
+                   class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div class="flex items-end pb-2">
+            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input type="checkbox" x-model="newAccountForm.set_active" class="rounded bg-dark-900 border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
+              <span>تنظیم بلافاصله به عنوان اکانت فعال</span>
+            </label>
+          </div>
+        </div>
+
+        <button type="button" @click="addAccount()" :disabled="isAddingAccount || !newAccountForm.token"
+                class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition">
+          <template x-if="!isAddingAccount">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="shield-check" class="w-4 h-4"></i>
+              <span>اعتبارسنجی و ذخیره اکانت</span>
+            </div>
+          </template>
+          <template x-if="isAddingAccount">
+            <div class="flex items-center gap-1.5">
+              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              <span>در حال اعتبارسنجی با گیت‌هاب...</span>
+            </div>
+          </template>
+        </button>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex items-center justify-end border-t border-white/10 pt-3">
+        <button type="button" @click="showAccountsModal = false" class="px-5 py-2 rounded-xl text-xs text-slate-300 hover:text-white bg-dark-800 hover:bg-dark-700 transition">
+          بستن
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <script>
     function factoryApp() {
       return {
@@ -470,6 +662,17 @@
         systemStatus: {},
         templates: [],
         projects: [],
+        accounts: [],
+        activeAccount: null,
+        showAccountsModal: false,
+        showTokenInput: false,
+        isAddingAccount: false,
+        testingAccountLogin: null,
+        newAccountForm: {
+          token: '',
+          label: '',
+          set_active: true
+        },
         selectedRepo: 'ali-ahadi1105/notion-test',
         pipelineData: {},
         isLaunching: false,
@@ -481,6 +684,7 @@
         launchForm: {
           repo_name: '',
           spec_text: '',
+          account_login: '',
           is_private: false,
           create_github_repo: true,
           install_orchestrator: true,
@@ -489,6 +693,7 @@
 
         async initApp() {
           await this.fetchStatus();
+          await this.fetchAccounts();
           await this.fetchTemplates();
           await this.fetchProjects();
           if (this.projects.length > 0) {
@@ -520,6 +725,111 @@
             this.systemStatus = await res.json();
           } catch (e) {
             console.error('System status fetch failed', e);
+          }
+        },
+
+        openAccountsModal() {
+          this.showAccountsModal = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        selectAccountForLaunch(login) {
+          this.launchForm.account_login = login;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        async fetchAccounts() {
+          try {
+            const res = await fetch('/api/accounts');
+            this.accounts = await res.json();
+            this.activeAccount = this.accounts.find(a => a.is_active) || this.accounts[0] || null;
+            if (this.activeAccount && !this.launchForm.account_login) {
+              this.launchForm.account_login = this.activeAccount.login;
+            }
+          } catch (e) {
+            console.error('Accounts fetch failed', e);
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async addAccount() {
+          if (!this.newAccountForm.token || !this.newAccountForm.token.trim()) {
+            this.showToast('لطفاً توکن گیت‌هاب را وارد کنید', 'error', 'alert-circle');
+            return;
+          }
+          this.isAddingAccount = true;
+          try {
+            const res = await fetch('/api/accounts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newAccountForm)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'افزودن اکانت ناموفق بود');
+
+            this.showToast(`اکانت @${data.login} با موفقیت افزوده شد!`, 'success', 'check-circle');
+            this.newAccountForm = { token: '', label: '', set_active: true };
+            await this.fetchAccounts();
+            await this.fetchStatus();
+            await this.fetchProjects();
+          } catch (err) {
+            this.showToast(err.message, 'error', 'alert-triangle');
+          } finally {
+            this.isAddingAccount = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async activateAccount(login) {
+          try {
+            const res = await fetch(`/api/accounts/${login}/activate`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'فعال‌سازی اکانت ناموفق بود');
+
+            this.showToast(`اکانت فعال به @${login} تغییر یافت`, 'success', 'check');
+            await this.fetchAccounts();
+            this.launchForm.account_login = login;
+            await this.fetchStatus();
+            await this.fetchProjects();
+          } catch (err) {
+            this.showToast(err.message, 'error', 'alert-triangle');
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async deleteAccount(login) {
+          if (!confirm(`آیا از حذف اکانت @${login} اطمینان دارید؟`)) return;
+          try {
+            const res = await fetch(`/api/accounts/${login}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'حذف اکانت ناموفق بود');
+
+            this.showToast(`اکانت @${login} حذف شد`, 'info', 'trash-2');
+            await this.fetchAccounts();
+            await this.fetchStatus();
+            await this.fetchProjects();
+          } catch (err) {
+            this.showToast(err.message, 'error', 'alert-triangle');
+          } finally {
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async testAccount(login) {
+          this.testingAccountLogin = login;
+          try {
+            const res = await fetch(`/api/accounts/${login}/test`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'تست اتصال ناموفق بود');
+
+            this.showToast(`اتصال به @${data.login} با موفقیت برقرار شد (${data.public_repos} مخزن)`, 'success', 'check-circle');
+          } catch (err) {
+            this.showToast(err.message, 'error', 'alert-triangle');
+          } finally {
+            this.testingAccountLogin = null;
+            this.$nextTick(() => lucide.createIcons());
           }
         },
 

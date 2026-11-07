@@ -18,6 +18,36 @@ from github_client import GitHubClient, GitHubError
 from orchestrator import check_and_transition
 
 
+def get_token(secret_name: str) -> str | None:
+    token = os.environ.get(secret_name) or os.environ.get("GITHUB_TOKEN") or os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+    if token:
+        return token
+    if os.environ.get("AGENT_SERVER_URL") and os.environ.get("SESSION_API_KEY"):
+        try:
+            from openhands.sdk.workspace import RemoteWorkspace
+            workspace = RemoteWorkspace(
+                host=os.environ["AGENT_SERVER_URL"],
+                api_key=os.environ["SESSION_API_KEY"],
+                working_dir=os.environ.get("WORKSPACE_BASE", "/workspace"),
+            )
+            try:
+                secret = workspace.get_secrets([secret_name]).get(secret_name)
+                if secret and secret.get_value():
+                    return secret.get_value()
+            finally:
+                workspace.reset_client()
+        except Exception:
+            pass
+    try:
+        import subprocess
+        res = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
 def main() -> int:
     config_path = Path("config.json")
     if not config_path.is_file():
@@ -26,7 +56,7 @@ def main() -> int:
 
     config = json.loads(config_path.read_text(encoding="utf-8"))
     token_secret_name = config.get("github_token_secret", "GITHUB_PERSONAL_ACCESS_TOKEN")
-    token = os.environ.get(token_secret_name)
+    token = get_token(token_secret_name)
     if not token:
         print(json.dumps({"error": f"Required GitHub token {token_secret_name} not found in environment"}), flush=True)
         return 1

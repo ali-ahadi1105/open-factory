@@ -33,6 +33,7 @@ SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
 DASHBOARD_DIR = Path(__file__).resolve().parent
 STATIC_DIR = DASHBOARD_DIR / "static"
 PROJECTS_FILE = DASHBOARD_DIR / "projects.json"
+ACCOUNTS_FILE = DASHBOARD_DIR / "accounts.json"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -57,7 +58,58 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # --- Helper functions ---
 
-def get_client() -> GitHubClient:
+def load_accounts() -> list[dict[str, Any]]:
+    if not ACCOUNTS_FILE.is_file():
+        # Seed initial account from default system token if available
+        try:
+            token = get_token()
+            client = GitHubClient(token=token)
+            user_info = client.request("GET", "/user")
+            initial_acc = {
+                "login": user_info.get("login"),
+                "name": user_info.get("name") or user_info.get("login"),
+                "avatar_url": user_info.get("avatar_url"),
+                "token": token,
+                "label": "پیش‌فرض سیستم (Default)",
+                "is_active": True,
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }
+            save_accounts([initial_acc])
+            return [initial_acc]
+        except Exception:
+            return []
+    try:
+        return json.loads(ACCOUNTS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+
+def save_accounts(accounts: list[dict[str, Any]]):
+    ACCOUNTS_FILE.write_text(json.dumps(accounts, indent=2), encoding="utf-8")
+
+
+def get_active_account() -> dict[str, Any] | None:
+    accounts = load_accounts()
+    for acc in accounts:
+        if acc.get("is_active"):
+            return acc
+    if accounts:
+        return accounts[0]
+    return None
+
+
+def get_client(account_login: str | None = None) -> GitHubClient:
+    accounts = load_accounts()
+    if account_login:
+        for acc in accounts:
+            if acc["login"].lower() == account_login.lower():
+                return GitHubClient(token=acc["token"])
+        raise HTTPException(status_code=404, detail=f"Account '{account_login}' not found in configured accounts.")
+    
+    active = get_active_account()
+    if active and active.get("token"):
+        return GitHubClient(token=active["token"])
+
     try:
         return GitHubClient()
     except Exception as exc:
@@ -93,9 +145,16 @@ def ensure_project_tracked(repo: str, name: str = "", description: str = ""):
 
 # --- Models ---
 
+class AddAccountRequest(BaseModel):
+    token: str = Field(..., description="GitHub Personal Access Token (classic ghp_... or fine-grained github_pat_...)")
+    label: str | None = Field(None, description="Optional alias, e.g. 'Personal', 'Work', 'Deploy Bot'")
+    set_active: bool = Field(True, description="Whether to make this account the active account")
+
+
 class LaunchRequest(BaseModel):
     repo_name: str = Field(..., description="Target repo name (e.g. 'my-app' or 'owner/my-app')")
     spec_text: str = Field(..., description="Markdown project specification with ## Phase N sections")
+    account_login: str | None = Field(None, description="Optional GitHub account login to use for launching")
     create_github_repo: bool = Field(True, description="Create repository on GitHub if it does not exist")
     is_private: bool = Field(False, description="Whether to make new repository private")
     install_orchestrator: bool = Field(True, description="Install GitHub Actions auto-orchestrator workflow")
@@ -231,20 +290,22 @@ async def serve_dashboard():
 def get_system_status():
     status = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "github": {"connected": False, "user": None, "token_source": None},
+        "github": {"connected": False, "user": None, "token_source": None, "accounts_count": 0, "active_login": None},
         "openhands": {"connected": False, "version": None, "usable_tools": []},
     }
 
     # 1. Test GitHub
     try:
-        token = get_token()
-        status["github"]["token_source"] = "active_token"
-        client = GitHubClient(token=token)
+        accounts = load_accounts()
+        status["github"]["accounts_count"] = len(accounts)
+        client = get_client()
         user_info = client.request("GET", "/user")
         status["github"]["connected"] = True
+        status["github"]["token_source"] = "active_account" if accounts else "env_token"
+        status["github"]["active_login"] = user_info.get("login")
         status["github"]["user"] = {
             "login": user_info.get("login"),
-            "name": user_info.get("name"),
+            "name": user_info.get("name") or user_info.get("login"),
             "avatar_url": user_info.get("avatar_url"),
             "public_repos": user_info.get("public_repos"),
             "html_url": user_info.get("html_url"),
@@ -265,6 +326,131 @@ def get_system_status():
         status["openhands"]["error"] = str(exc)
 
     return status
+
+
+# --- GitHub Accounts Management Endpoints ---
+
+@app.get("/api/accounts")
+def list_accounts():
+    accounts = load_accounts()
+    safe_accounts = []
+    for acc in accounts:
+        token = acc.get("token", "")
+        masked = f"{token[:4]}...{token[-4:]}" if len(token) >= 8 else "***"
+        safe_accounts.append({
+            "login": acc.get("login"),
+            "name": acc.get("name"),
+            "avatar_url": acc.get("avatar_url"),
+            "label": acc.get("label", ""),
+            "masked_token": masked,
+            "is_active": acc.get("is_active", False),
+            "created_at": acc.get("created_at"),
+            "public_repos": acc.get("public_repos", 0),
+        })
+    return safe_accounts
+
+
+@app.post("/api/accounts")
+def add_account(req: AddAccountRequest):
+    token = req.token.strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="توکن گیت‌هاب نمی‌تواند خالی باشد.")
+
+    # Validate token by querying GitHub /user
+    try:
+        client = GitHubClient(token=token)
+        user_info = client.request("GET", "/user")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"توکن نامعتبر است یا امکان اتصال به گیت‌هاب وجود ندارد: {exc}"
+        )
+
+    login = user_info.get("login")
+    if not login:
+        raise HTTPException(status_code=400, detail="پاسخ گیت‌هاب فاقد اطلاعات کاربری بود.")
+
+    accounts = load_accounts()
+
+    if req.set_active:
+        for a in accounts:
+            a["is_active"] = False
+
+    existing = next((a for a in accounts if a["login"].lower() == login.lower()), None)
+    if existing:
+        existing["token"] = token
+        existing["name"] = user_info.get("name") or login
+        existing["avatar_url"] = user_info.get("avatar_url")
+        existing["public_repos"] = user_info.get("public_repos", 0)
+        if req.label:
+            existing["label"] = req.label
+        if req.set_active:
+            existing["is_active"] = True
+    else:
+        accounts.append({
+            "login": login,
+            "name": user_info.get("name") or login,
+            "avatar_url": user_info.get("avatar_url"),
+            "public_repos": user_info.get("public_repos", 0),
+            "token": token,
+            "label": req.label or "",
+            "is_active": req.set_active or len(accounts) == 0,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        })
+
+    save_accounts(accounts)
+    return {
+        "status": "ok",
+        "login": login,
+        "name": user_info.get("name") or login,
+        "avatar_url": user_info.get("avatar_url"),
+    }
+
+
+@app.post("/api/accounts/{login}/activate")
+def activate_account(login: str):
+    accounts = load_accounts()
+    found = False
+    for a in accounts:
+        if a["login"].lower() == login.lower():
+            a["is_active"] = True
+            found = True
+        else:
+            a["is_active"] = False
+    if not found:
+        raise HTTPException(status_code=404, detail=f"اکانت '{login}' یافت نشد.")
+    save_accounts(accounts)
+    return {"status": "ok", "active_login": login}
+
+
+@app.delete("/api/accounts/{login}")
+def delete_account(login: str):
+    accounts = load_accounts()
+    new_accounts = [a for a in accounts if a["login"].lower() != login.lower()]
+    if len(new_accounts) == len(accounts):
+        raise HTTPException(status_code=404, detail=f"اکانت '{login}' یافت نشد.")
+
+    # If deleted account was active, activate the first remaining account
+    if new_accounts and not any(a.get("is_active") for a in new_accounts):
+        new_accounts[0]["is_active"] = True
+
+    save_accounts(new_accounts)
+    return {"status": "ok", "deleted": login}
+
+
+@app.post("/api/accounts/{login}/test")
+def test_account(login: str):
+    try:
+        client = get_client(account_login=login)
+        user_info = client.request("GET", "/user")
+        return {
+            "status": "ok",
+            "login": user_info.get("login"),
+            "name": user_info.get("name"),
+            "public_repos": user_info.get("public_repos"),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"خطا در اعتبارسنجی اتصال اکانت: {exc}")
 
 
 @app.get("/api/templates")
@@ -331,7 +517,7 @@ def track_project(req: TrackRequest):
 
 @app.post("/api/projects/launch")
 def launch_project(req: LaunchRequest):
-    client = get_client()
+    client = get_client(account_login=req.account_login)
     raw_repo = req.repo_name.strip()
     user_info = client.request("GET", "/user")
     current_user = user_info.get("login")
