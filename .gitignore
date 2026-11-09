@@ -8,3 +8,5 @@ dashboard/projects.json
 dashboard/openhands_config.json
 .env
 *.env
+.factory_logs/
+*.pid
