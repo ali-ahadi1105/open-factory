@@ -9,7 +9,7 @@
   <!-- Google Fonts: Vazirmatn & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Alpine.js -->
@@ -44,14 +44,47 @@
   </script>
   <style>
     body { font-family: 'Vazirmatn', 'Inter', sans-serif; }
-    .glass { background: rgba(17, 24, 39, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .glass-card { background: rgba(31, 41, 55, 0.6); backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.06); }
-    .glass-card:hover { border-color: rgba(99, 102, 241, 0.4); }
+    html[dir="ltr"] body { font-family: 'Inter', 'Vazirmatn', sans-serif; }
+
+    /* Light Theme Glass */
+    .glass {
+      background: rgba(255, 255, 255, 0.88);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(226, 232, 240, 0.9);
+      box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+    }
+    .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+    }
+
+    /* Dark Theme Glass */
+    .dark .glass {
+      background: rgba(17, 24, 39, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: none;
+    }
+    .dark .glass-card {
+      background: rgba(31, 41, 55, 0.6);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: none;
+    }
+    .dark .glass-card:hover {
+      border-color: rgba(99, 102, 241, 0.4);
+    }
     [x-cloak] { display: none !important; }
   </style>
 </head>
 
-<body class="bg-dark-900 text-slate-100 min-h-screen flex flex-col" x-data="factoryApp()" x-init="initApp()">
+<body class="bg-slate-100 text-slate-800 dark:bg-dark-900 dark:text-slate-100 min-h-screen flex flex-col transition-colors duration-200" 
+      x-data="factoryApp()" x-init="initApp()">
 
   <!-- Toast Notifications -->
   <div class="fixed top-5 left-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none" dir="ltr">
@@ -69,49 +102,71 @@
   </div>
 
   <!-- Header / Navigation -->
-  <header class="glass sticky top-0 z-40 border-b border-white/10 px-6 py-4">
+  <header class="glass sticky top-0 z-40 border-b border-slate-200 dark:border-white/10 px-6 py-3.5">
     <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
       
       <!-- Logo & Title -->
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <i data-lucide="cpu" class="w-6 h-6 text-white"></i>
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white shrink-0">
+          <i data-lucide="cpu" class="w-6 h-6"></i>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <h1 class="font-bold text-lg text-white">OpenHands Software Factory</h1>
-            <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-medium border border-brand-500/30">v2.0 Autonomous</span>
+            <h1 class="font-bold text-lg text-slate-900 dark:text-white" x-text="t('app_title')"></h1>
+            <span class="text-xs px-2 py-0.5 rounded-full bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 font-medium border border-brand-500/30" x-text="t('app_badge')"></span>
           </div>
-          <p class="text-xs text-slate-400">داشبورد خودکار سفارش و مانیتورینگ خط تولید نرم‌افزار</p>
+          <p class="text-xs text-slate-500 dark:text-slate-400" x-text="t('app_subtitle')"></p>
         </div>
       </div>
 
-      <!-- System Health Pills & Account Management -->
-      <div class="flex items-center gap-3">
-        <!-- GitHub Account Button & Status -->
+      <!-- Action Buttons & Switchers -->
+      <div class="flex items-center gap-2.5 flex-wrap">
+        
+        <!-- Language Switcher Button -->
+        <button type="button" @click="toggleLanguage()" 
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition-all cursor-pointer"
+                :title="currentLang === 'fa' ? 'Switch to English' : 'تغییر به فارسی'">
+          <span class="text-sm" x-text="currentLang === 'fa' ? '🇬🇧' : '🇮🇷'"></span>
+          <span x-text="currentLang === 'fa' ? 'English' : 'فارسی'"></span>
+        </button>
+
+        <!-- Theme Switcher Button -->
+        <button type="button" @click="toggleTheme()" 
+                class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-sm transition-all cursor-pointer"
+                :title="currentTheme === 'dark' ? t('switch_to_light') : t('switch_to_dark')">
+          <template x-if="currentTheme === 'dark'">
+            <i data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
+          </template>
+          <template x-if="currentTheme === 'light'">
+            <i data-lucide="moon" class="w-4 h-4 text-indigo-500"></i>
+          </template>
+          <span x-text="currentTheme === 'dark' ? t('theme_light') : t('theme_dark')"></span>
+        </button>
+
+        <!-- GitHub Account Button -->
         <button type="button" @click="openAccountsModal()" 
-                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-brand-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
+                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 hover:border-brand-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
           <template x-if="activeAccount && activeAccount.avatar_url">
-            <img :src="activeAccount.avatar_url" class="w-4 h-4 rounded-full ring-1 ring-white/20">
+            <img :src="activeAccount.avatar_url" class="w-4 h-4 rounded-full ring-1 ring-slate-200 dark:ring-white/20">
           </template>
           <template x-if="!activeAccount || !activeAccount.avatar_url">
-            <i data-lucide="github" class="w-4 h-4 text-slate-300"></i>
+            <i data-lucide="github" class="w-4 h-4 text-slate-600 dark:text-slate-300"></i>
           </template>
           <div class="flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full" :class="systemStatus.github?.connected ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-rose-400'"></span>
-            <span class="font-medium text-slate-200" x-text="activeAccount ? '@' + activeAccount.login : (systemStatus.github?.user?.login ? '@' + systemStatus.github.user.login : 'اتصال گیت‌هاب')"></span>
+            <span class="w-2 h-2 rounded-full" :class="systemStatus.github?.connected ? 'bg-emerald-500 shadow-sm shadow-emerald-400' : 'bg-rose-500'"></span>
+            <span class="font-medium text-slate-700 dark:text-slate-200" x-text="activeAccount ? '@' + activeAccount.login : (systemStatus.github?.user?.login ? '@' + systemStatus.github.user.login : t('connect_github'))"></span>
           </div>
-          <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 group-hover:bg-brand-500/30">اکانت‌ها</span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 border border-brand-500/30" x-text="t('accounts_btn')"></span>
         </button>
 
         <!-- OpenHands Engine Configuration Button -->
         <button type="button" @click="openEngineModal()"
-                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-indigo-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
-          <span class="w-2.5 h-2.5 rounded-full" :class="systemStatus.openhands?.connected ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-rose-400'"></span>
-          <i data-lucide="bot" class="w-4 h-4 text-slate-300"></i>
+                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
+          <span class="w-2.5 h-2.5 rounded-full" :class="systemStatus.openhands?.connected ? 'bg-emerald-500 shadow-sm shadow-emerald-400' : 'bg-rose-500'"></span>
+          <i data-lucide="bot" class="w-4 h-4 text-slate-600 dark:text-slate-300"></i>
           <div class="flex items-center gap-1.5">
-            <span class="font-medium text-slate-200" x-text="systemStatus.openhands?.mode === 'cloud' ? 'OpenHands Cloud' : 'OpenHands Local'"></span>
-            <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 group-hover:bg-indigo-500/30">موتور</span>
+            <span class="font-medium text-slate-700 dark:text-slate-200" x-text="systemStatus.openhands?.mode === 'cloud' ? t('openhands_cloud') : t('openhands_local')"></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30" x-text="t('engine_btn')"></span>
           </div>
         </button>
 
@@ -119,7 +174,7 @@
         <button type="button" @click="openConsoleDrawer()"
                 class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-bold transition-all duration-200 shadow-md shadow-indigo-600/20 cursor-pointer">
           <i data-lucide="terminal" class="w-4 h-4"></i>
-          <span>کنسول و چت زنده ایجنت</span>
+          <span x-text="t('live_console_btn')"></span>
           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         </button>
       </div>
@@ -131,26 +186,26 @@
   <main class="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6">
 
     <!-- Navigation Tabs -->
-    <div class="flex items-center gap-2 border-b border-white/10 pb-2">
+    <div class="flex items-center gap-2 border-b border-slate-200 dark:border-white/10 pb-2">
       <button @click="activeTab = 'launch'" 
               class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-              :class="activeTab === 'launch' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'">
+              :class="activeTab === 'launch' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'">
         <i data-lucide="rocket" class="w-4 h-4"></i>
-        <span>سفارش پروژه جدید (Launch)</span>
+        <span x-text="t('tab_launch')"></span>
       </button>
 
       <button @click="activeTab = 'pipeline'; refreshCurrentPipeline()" 
               class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-              :class="activeTab === 'pipeline' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'">
+              :class="activeTab === 'pipeline' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'">
         <i data-lucide="activity" class="w-4 h-4"></i>
-        <span>پروژه‌ها و خط تولید زنده (Pipelines)</span>
+        <span x-text="t('tab_pipeline')"></span>
       </button>
 
       <button @click="activeTab = 'templates'" 
               class="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
-              :class="activeTab === 'templates' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-400 hover:text-white hover:bg-white/5'">
+              :class="activeTab === 'templates' ? 'bg-brand-600 text-white shadow-lg shadow-indigo-600/30' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/50 dark:hover:bg-white/5'">
         <i data-lucide="layers" class="w-4 h-4"></i>
-        <span>قالب‌های آماده (Templates)</span>
+        <span x-text="t('tab_templates')"></span>
       </button>
     </div>
 
@@ -160,25 +215,23 @@
       <!-- Launch Form (2 Columns) -->
       <div class="lg:col-span-2 flex flex-col gap-5 glass p-6 rounded-2xl">
         <div>
-          <h2 class="text-lg font-bold text-white flex items-center gap-2">
-            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
-            <span>تعریف ایده و پرتاب پروژه به خط تولید خودکار</span>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-500 dark:text-indigo-400"></i>
+            <span x-text="t('launch_card_title')"></span>
           </h2>
-          <p class="text-xs text-slate-400 mt-1">
-            مشخصات پروژه را بنویسید؛ پلنر هوشمند آن را به فازهای مستقل خرد کرده و چرخه ساخت و مرج خودکار را آغاز می‌کند.
-          </p>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" x-text="t('launch_card_subtitle')"></p>
         </div>
 
         <!-- Target GitHub Account Selector -->
-        <div class="p-4 rounded-xl bg-dark-800/60 border border-white/5 flex flex-col gap-2.5">
+        <div class="p-4 rounded-xl bg-slate-50 dark:bg-dark-800/60 border border-slate-200 dark:border-white/5 flex flex-col gap-2.5">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <i data-lucide="user-check" class="w-4 h-4 text-brand-400"></i>
-              <span>اکانت گیت‌هاب مالک مخزن (GitHub Owner Account):</span>
+            <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+              <i data-lucide="user-check" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+              <span x-text="t('account_label')"></span>
             </label>
-            <button type="button" @click="openAccountsModal()" class="text-[11px] text-brand-400 hover:text-brand-300 flex items-center gap-1 transition">
+            <button type="button" @click="openAccountsModal()" class="text-[11px] text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1 transition">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-              <span>افزودن اکانت جدید</span>
+              <span x-text="t('add_account_btn')"></span>
             </button>
           </div>
           
@@ -187,15 +240,15 @@
               <div @click="selectAccountForLaunch(acc.login)"
                    class="p-2.5 rounded-xl border text-xs cursor-pointer flex items-center gap-2.5 transition-all"
                    :class="launchForm.account_login === acc.login 
-                     ? 'bg-brand-600/20 border-brand-500 text-white shadow-sm shadow-brand-500/10' 
-                     : 'bg-dark-800 hover:bg-dark-700 border-white/5 text-slate-400 hover:text-slate-200'">
-                <img :src="acc.avatar_url" class="w-6 h-6 rounded-full shrink-0 border border-white/10">
+                     ? 'bg-brand-50 dark:bg-brand-600/20 border-brand-500 text-brand-700 dark:text-white shadow-sm' 
+                     : 'bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border-slate-200 dark:border-white/5 text-slate-600 dark:text-slate-400'">
+                <img :src="acc.avatar_url" class="w-6 h-6 rounded-full shrink-0 border border-slate-200 dark:border-white/10">
                 <div class="flex-1 min-w-0">
-                  <div class="font-bold truncate text-white" x-text="'@' + acc.login"></div>
-                  <div class="text-[10px] text-slate-400 truncate" x-text="acc.label || acc.name"></div>
+                  <div class="font-bold truncate text-slate-900 dark:text-white" x-text="'@' + acc.login"></div>
+                  <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate" x-text="acc.label || acc.name"></div>
                 </div>
                 <template x-if="launchForm.account_login === acc.login">
-                  <i data-lucide="check-circle" class="w-4 h-4 text-brand-400 shrink-0"></i>
+                  <i data-lucide="check-circle" class="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0"></i>
                 </template>
               </div>
             </template>
@@ -205,36 +258,38 @@
         <!-- Repository Name & Visibility -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="md:col-span-2">
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5">نام مخزن در گیت‌هاب (Repository Name)</label>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5" x-text="t('repo_name_label')"></label>
             <div class="relative flex items-center" dir="ltr">
-              <span class="absolute left-3 text-xs text-slate-500 select-none font-mono" x-text="(launchForm.account_login || (activeAccount ? activeAccount.login : (systemStatus.github?.user?.login || 'owner'))) + '/'"></span>
+              <span class="absolute left-3 text-xs text-slate-400 dark:text-slate-500 select-none font-mono" x-text="(launchForm.account_login || (activeAccount ? activeAccount.login : (systemStatus.github?.user?.login || 'owner'))) + '/'"></span>
               <input type="text" x-model="launchForm.repo_name" 
-                     placeholder="my-awesome-project" 
-                     class="w-full bg-dark-800 border border-white/10 rounded-xl py-2.5 pr-4 pl-36 text-sm text-white focus:outline-none focus:border-brand-500 transition-colors">
+                     :placeholder="t('repo_name_placeholder')" 
+                     class="w-full bg-white dark:bg-dark-800 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pr-4 pl-36 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 transition-colors shadow-sm">
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5">نوع مخزن (Visibility)</label>
-            <div class="flex items-center gap-2 bg-dark-800 p-1.5 rounded-xl border border-white/10">
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5" x-text="t('visibility_label')"></label>
+            <div class="flex items-center gap-2 bg-white dark:bg-dark-800 p-1.5 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm">
               <button type="button" @click="launchForm.is_private = false" 
                       class="flex-1 py-1.5 rounded-lg text-xs font-medium transition"
-                      :class="!launchForm.is_private ? 'bg-brand-600 text-white' : 'text-slate-400'">عمومی (Public)</button>
+                      :class="!launchForm.is_private ? 'bg-brand-600 text-white' : 'text-slate-500 dark:text-slate-400'"
+                      x-text="t('visibility_public')"></button>
               <button type="button" @click="launchForm.is_private = true" 
                       class="flex-1 py-1.5 rounded-lg text-xs font-medium transition"
-                      :class="launchForm.is_private ? 'bg-brand-600 text-white' : 'text-slate-400'">خصوصی (Private)</button>
+                      :class="launchForm.is_private ? 'bg-brand-600 text-white' : 'text-slate-500 dark:text-slate-400'"
+                      x-text="t('visibility_private')"></button>
             </div>
           </div>
         </div>
 
         <!-- Template Fast-Pills -->
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5">انتخاب سریع از قالب‌های آماده:</label>
+          <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5" x-text="t('quick_templates_label')"></label>
           <div class="flex flex-wrap gap-2">
             <template x-for="tmpl in templates" :key="tmpl.id">
               <button type="button" @click="applyTemplate(tmpl)" 
-                      class="px-3 py-1.5 rounded-lg bg-dark-800 hover:bg-white/10 border border-white/10 text-xs text-slate-300 flex items-center gap-1.5 transition">
-                <i data-lucide="copy" class="w-3.5 h-3.5 text-indigo-400"></i>
+                      class="px-3 py-1.5 rounded-lg bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-white/10 border border-slate-200 dark:border-white/10 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition shadow-sm">
+                <i data-lucide="copy" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400"></i>
                 <span x-text="tmpl.title"></span>
               </button>
             </template>
@@ -244,23 +299,23 @@
         <!-- Specification Editor -->
         <div>
           <div class="flex items-center justify-between mb-1.5">
-            <label class="block text-xs font-semibold text-slate-300">سند نیازمندی‌ها و فازها (Markdown Specification)</label>
-            <span class="text-[11px] text-slate-500 font-mono">الگوی استاندارد: ## Phase 1: Title</span>
+            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300" x-text="t('spec_label')"></label>
+            <span class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">## Phase 1: Title</span>
           </div>
           <textarea x-model="launchForm.spec_text" rows="12" dir="ltr"
-                    placeholder="# Project Title&#10;&#10;## Phase 1: Foundation&#10;Describe requirements...&#10;&#10;## Phase 2: Next Feature&#10;Describe next requirements..."
-                    class="w-full bg-dark-800 border border-white/10 rounded-xl p-4 font-mono text-xs text-slate-200 focus:outline-none focus:border-brand-500 transition-colors leading-relaxed"></textarea>
+                    :placeholder="t('spec_placeholder')"
+                    class="w-full bg-white dark:bg-dark-800 border border-slate-200 dark:border-white/10 rounded-xl p-4 font-mono text-xs text-slate-900 dark:text-slate-200 focus:outline-none focus:border-brand-500 transition-colors leading-relaxed shadow-sm"></textarea>
         </div>
 
         <!-- Automation Checkboxes -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-white/5">
-          <label class="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
-            <input type="checkbox" x-model="launchForm.create_github_repo" class="rounded bg-dark-800 border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
-            <span>ساخت خودکار مخزن در گیت‌هاب در صورت عدم وجود</span>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-white/5">
+          <label class="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="checkbox" x-model="launchForm.create_github_repo" class="rounded bg-slate-50 dark:bg-dark-800 border-slate-300 dark:border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
+            <span x-text="t('create_repo_checkbox')"></span>
           </label>
-          <label class="flex items-center gap-2.5 text-xs text-slate-300 cursor-pointer">
-            <input type="checkbox" x-model="launchForm.install_orchestrator" class="rounded bg-dark-800 border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
-            <span>نصب ورک‌فلو ناظر فازها در GitHub Actions</span>
+          <label class="flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+            <input type="checkbox" x-model="launchForm.install_orchestrator" class="rounded bg-slate-50 dark:bg-dark-800 border-slate-300 dark:border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
+            <span x-text="t('install_orchestrator_checkbox')"></span>
           </label>
         </div>
 
@@ -270,13 +325,13 @@
           <template x-if="!isLaunching">
             <div class="flex items-center gap-2">
               <i data-lucide="rocket" class="w-5 h-5"></i>
-              <span>پرتاب پروژه به کارخانه نرم‌افزار (Launch Factory)</span>
+              <span x-text="t('launch_btn')"></span>
             </div>
           </template>
           <template x-if="isLaunching">
             <div class="flex items-center gap-2">
               <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              <span>در حال ساخت مخزن و شکستن فازها در گیت‌هاب...</span>
+              <span x-text="t('launching_btn')"></span>
             </div>
           </template>
         </button>
@@ -287,26 +342,26 @@
       <div class="flex flex-col gap-4">
         
         <div class="glass p-5 rounded-2xl flex flex-col gap-4">
-          <h3 class="font-bold text-sm text-white flex items-center gap-2">
-            <i data-lucide="workflow" class="w-4 h-4 text-emerald-400"></i>
-            <span>چرخه خودکار چطور کار می‌کند؟</span>
+          <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="workflow" class="w-4 h-4 text-emerald-500"></i>
+            <span x-text="t('guide_title')"></span>
           </h3>
-          <ul class="flex flex-col gap-3 text-xs text-slate-300">
+          <ul class="flex flex-col gap-3 text-xs text-slate-600 dark:text-slate-300">
             <li class="flex items-start gap-2.5">
-              <span class="w-5 h-5 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۱</span>
-              <div><strong>تفکیک نیازمندی‌ها (DAG):</strong> مشخصات شما خوانده شده و به فازهای مستقل با وابستگی در قالب Issues گیت‌هاب تبدیل می‌شود.</div>
+              <span class="w-5 h-5 rounded-full bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۱</span>
+              <div><strong x-text="t('guide_step1_title')"></strong> <span x-text="t('guide_step1_desc')"></span></div>
             </li>
             <li class="flex items-start gap-2.5">
-              <span class="w-5 h-5 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۲</span>
-              <div><strong>کدنویسی خودکار:</strong> ایجنت OpenHands فاز ۱ را بیدار کرده و در یک Branch اختصاصی کد می‌زند و PR باز می‌کند.</div>
+              <span class="w-5 h-5 rounded-full bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۲</span>
+              <div><strong x-text="t('guide_step2_title')"></strong> <span x-text="t('guide_step2_desc')"></span></div>
             </li>
             <li class="flex items-start gap-2.5">
-              <span class="w-5 h-5 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۳</span>
-              <div><strong>ریویو و ترمیم هوشمند (Auto-Heal):</strong> ایجنت ریویور کد را ارزیابی کرده و در صورت نیاز به اصلاح، سیستم خودکار تا ۳ بار به ایجنت دستور اصلاح می‌دهد.</div>
+              <span class="w-5 h-5 rounded-full bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۳</span>
+              <div><strong x-text="t('guide_step3_title')"></strong> <span x-text="t('guide_step3_desc')"></span></div>
             </li>
             <li class="flex items-start gap-2.5">
-              <span class="w-5 h-5 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۴</span>
-              <div><strong>مرج و آنبلاک فاز بعدی:</strong> پس از تایید، PR به طور خودکار مرج شده و فاز ۲ بدون دخالت دست باز می‌شود!</div>
+              <span class="w-5 h-5 rounded-full bg-brand-500/10 dark:bg-brand-500/20 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0 font-bold text-[10px]">۴</span>
+              <div><strong x-text="t('guide_step4_title')"></strong> <span x-text="t('guide_step4_desc')"></span></div>
             </li>
           </ul>
         </div>
@@ -314,25 +369,25 @@
         <!-- Tracked Repos List Box -->
         <div class="glass p-5 rounded-2xl flex flex-col gap-3">
           <div class="flex items-center justify-between">
-            <h3 class="font-bold text-sm text-white flex items-center gap-2">
-              <i data-lucide="folder-git-2" class="w-4 h-4 text-indigo-400"></i>
-              <span>پروژه‌های تحت نظارت</span>
+            <h3 class="font-bold text-sm text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="folder-git-2" class="w-4 h-4 text-indigo-500 dark:text-indigo-400"></i>
+              <span x-text="t('tracked_projects_title')"></span>
             </h3>
-            <button @click="showTrackModal = true" class="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1">
+            <button @click="showTrackModal = true" class="text-xs text-brand-600 dark:text-brand-400 hover:underline flex items-center gap-1">
               <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-              <span>افزودن مخزن</span>
+              <span x-text="t('add_repo_btn')"></span>
             </button>
           </div>
           <div class="flex flex-col gap-2 max-h-56 overflow-y-auto">
             <template x-for="p in projects" :key="p.repo">
               <div @click="selectProject(p.repo)" 
-                   class="p-2.5 rounded-xl bg-dark-800/80 hover:bg-dark-700/80 border border-white/5 cursor-pointer transition flex items-center justify-between">
+                   class="p-2.5 rounded-xl bg-white dark:bg-dark-800/80 hover:bg-slate-50 dark:hover:bg-dark-700/80 border border-slate-200 dark:border-white/5 cursor-pointer transition flex items-center justify-between shadow-sm">
                 <div>
-                  <div class="font-semibold text-xs text-white" x-text="p.name"></div>
-                  <div class="text-[11px] text-slate-400" x-text="p.repo"></div>
+                  <div class="font-semibold text-xs text-slate-900 dark:text-white" x-text="p.name"></div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400" x-text="p.repo"></div>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono" x-text="p.progress_percent + '%'"></span>
+                  <span class="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 font-mono" x-text="p.progress_percent + '%'"></span>
                 </div>
               </div>
             </template>
@@ -349,42 +404,42 @@
       <!-- Top Project Selector & Action Bar -->
       <div class="glass p-5 rounded-2xl flex items-center justify-between flex-wrap gap-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shrink-0">
             <i data-lucide="git-branch" class="w-5 h-5"></i>
           </div>
           <div>
             <div class="flex items-center gap-2">
               <select x-model="selectedRepo" @change="fetchPipeline(selectedRepo)" 
-                      class="bg-dark-800 border border-white/10 rounded-lg px-3 py-1.5 text-sm font-bold text-white focus:outline-none focus:border-brand-500" dir="ltr">
+                      class="bg-white dark:bg-dark-800 border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm" dir="ltr">
                 <template x-for="p in projects" :key="p.repo">
                   <option :value="p.repo" x-text="p.repo"></option>
                 </template>
               </select>
-              <a :href="'https://github.com/' + selectedRepo" target="_blank" class="text-slate-400 hover:text-white p-1 rounded-lg">
+              <a :href="'https://github.com/' + selectedRepo" target="_blank" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg">
                 <i data-lucide="external-link" class="w-4 h-4"></i>
               </a>
             </div>
-            <p class="text-xs text-slate-400 mt-1">مانیتورینگ وضعیت خط تولید، فازها، پول‌ریکوئست‌ها و ریویوها</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1" x-text="t('pipeline_subtitle')"></p>
           </div>
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 flex-wrap">
           <button @click="triggerOrchestrate()" :disabled="isActionLoading" 
-                  class="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
-            <i data-lucide="play" class="w-4 h-4 text-emerald-400"></i>
-            <span>آنبلاک فازهای آماده (Orchestrate)</span>
+                  class="px-3 py-2 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition shadow-sm">
+            <i data-lucide="play" class="w-4 h-4 text-emerald-500"></i>
+            <span x-text="t('orchestrate_btn')"></span>
           </button>
 
           <button @click="triggerHealer()" :disabled="isActionLoading" 
-                  class="px-3 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition">
-            <i data-lucide="shield-check" class="w-4 h-4 text-amber-400"></i>
-            <span>بررسی سلامت و ترمیم PRها (Auto-Heal)</span>
+                  class="px-3 py-2 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition shadow-sm">
+            <i data-lucide="shield-check" class="w-4 h-4 text-amber-500"></i>
+            <span x-text="t('healer_btn')"></span>
           </button>
 
           <button @click="fetchPipeline(selectedRepo)" 
-                  class="p-2 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 text-slate-400 hover:text-white transition">
-            <i data-lucide="refresh-cw" class="w-4 h-4" :class="isPipelineLoading ? 'animate-spin text-brand-400' : ''"></i>
+                  class="p-2 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition shadow-sm">
+            <i data-lucide="refresh-cw" class="w-4 h-4" :class="isPipelineLoading ? 'animate-spin text-brand-500' : ''"></i>
           </button>
         </div>
       </div>
@@ -392,10 +447,10 @@
       <!-- Pipeline Progress Bar -->
       <div class="glass p-5 rounded-2xl flex flex-col gap-2">
         <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold text-slate-300">پیشرفت کل پروژه</span>
-          <span class="font-mono font-bold text-brand-400" x-text="pipelineData.progress_percent + '% (' + (pipelineData.completed_phases || 0) + ' از ' + (pipelineData.total_phases || 0) + ' فاز تکمیل‌شده)'"></span>
+          <span class="font-semibold text-slate-700 dark:text-slate-300" x-text="t('pipeline_progress_title')"></span>
+          <span class="font-mono font-bold text-brand-600 dark:text-brand-400" x-text="pipelineData.progress_percent + '% (' + (pipelineData.completed_phases || 0) + ' / ' + (pipelineData.total_phases || 0) + ')'"></span>
         </div>
-        <div class="w-full h-3 rounded-full bg-dark-800 border border-white/5 overflow-hidden">
+        <div class="w-full h-3 rounded-full bg-slate-200 dark:bg-dark-800 border border-slate-300 dark:border-white/5 overflow-hidden">
           <div class="h-full bg-gradient-to-r from-brand-600 via-indigo-500 to-emerald-400 transition-all duration-500 rounded-full"
                :style="'width: ' + (pipelineData.progress_percent || 0) + '%'"></div>
         </div>
@@ -406,78 +461,78 @@
         <template x-for="phase in (pipelineData.phases || [])" :key="phase.issue_number">
           <div class="glass-card p-5 rounded-2xl flex flex-col justify-between gap-4 transition-all duration-300 relative overflow-hidden"
                :class="{
-                 'border-emerald-500/40 bg-emerald-950/10': phase.status === 'COMPLETED',
-                 'border-indigo-500/50 bg-indigo-950/20 shadow-lg shadow-indigo-500/10': phase.status === 'IN_PROGRESS',
-                 'border-amber-500/40 bg-amber-950/10': phase.status === 'HEALING',
-                 'border-rose-500/40 bg-rose-950/10': phase.status === 'ESCALATED',
-                 'border-white/5 opacity-70': phase.status === 'BLOCKED'
+                 'border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/10': phase.status === 'COMPLETED',
+                 'border-indigo-500/50 bg-indigo-50/60 dark:bg-indigo-950/20 shadow-lg shadow-indigo-500/10': phase.status === 'IN_PROGRESS',
+                 'border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/10': phase.status === 'HEALING',
+                 'border-rose-500/40 bg-rose-50/50 dark:bg-rose-950/10': phase.status === 'ESCALATED',
+                 'border-slate-200 dark:border-white/5 opacity-70': phase.status === 'BLOCKED'
                }">
             
             <div>
               <!-- Header: Phase Number & Status Badge -->
               <div class="flex items-center justify-between gap-2 mb-3">
-                <span class="text-xs font-mono font-bold text-brand-400 px-2 py-0.5 rounded-md bg-brand-500/10 border border-brand-500/20"
-                      x-text="'فاز ' + phase.phase"></span>
+                <span class="text-xs font-mono font-bold text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-md bg-brand-500/10 border border-brand-500/20"
+                      x-text="t('phase_label') + ' ' + phase.phase"></span>
                 
                 <!-- Status Badge -->
                 <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full"
                       :class="{
-                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30': phase.status === 'COMPLETED',
-                        'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 animate-pulse': phase.status === 'IN_PROGRESS',
-                        'bg-amber-500/20 text-amber-300 border border-amber-500/30': phase.status === 'HEALING',
-                        'bg-rose-500/20 text-rose-300 border border-rose-500/30': phase.status === 'ESCALATED',
-                        'bg-slate-700/40 text-slate-400 border border-slate-600/30': phase.status === 'BLOCKED'
+                        'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30': phase.status === 'COMPLETED',
+                        'bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 animate-pulse': phase.status === 'IN_PROGRESS',
+                        'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30': phase.status === 'HEALING',
+                        'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30': phase.status === 'ESCALATED',
+                        'bg-slate-200 dark:bg-slate-700/40 text-slate-600 dark:text-slate-400 border border-slate-300 dark:border-slate-600/30': phase.status === 'BLOCKED'
                       }"
                       x-text="translateStatus(phase.status)"></span>
               </div>
 
               <!-- Phase Title -->
-              <h4 class="font-bold text-sm text-white mb-2 line-clamp-2" x-text="phase.title"></h4>
+              <h4 class="font-bold text-sm text-slate-900 dark:text-white mb-2 line-clamp-2" x-text="phase.title"></h4>
 
               <!-- Issue Link -->
-              <a :href="phase.url" target="_blank" class="inline-flex items-center gap-1 text-xs text-slate-400 hover:text-brand-300 transition">
+              <a :href="phase.url" target="_blank" class="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-300 transition">
                 <i data-lucide="circle-dot" class="w-3.5 h-3.5"></i>
                 <span x-text="'Issue #' + phase.issue_number"></span>
               </a>
             </div>
 
             <!-- Footer: PR & Blocker Details -->
-            <div class="pt-3 border-t border-white/5 flex flex-col gap-2 text-xs">
+            <div class="pt-3 border-t border-slate-200 dark:border-white/5 flex flex-col gap-2 text-xs">
               <!-- PR Status if exists -->
               <template x-if="phase.pr">
-                <div class="flex items-center justify-between bg-dark-800/60 px-2.5 py-1.5 rounded-lg border border-white/5">
-                  <a :href="phase.pr.html_url" target="_blank" class="flex items-center gap-1 font-mono font-semibold text-indigo-300 hover:underline">
+                <div class="flex items-center justify-between bg-slate-50 dark:bg-dark-800/60 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/5">
+                  <a :href="phase.pr.html_url" target="_blank" class="flex items-center gap-1 font-mono font-semibold text-indigo-600 dark:text-indigo-300 hover:underline">
                     <i data-lucide="git-pull-request" class="w-3.5 h-3.5"></i>
                     <span x-text="'PR #' + phase.pr.number"></span>
                   </a>
                   <span class="text-[10px] uppercase font-bold"
-                        :class="phase.pr.state === 'closed' ? 'text-emerald-400' : 'text-indigo-400'"
+                        :class="phase.pr.state === 'closed' ? 'text-emerald-500' : 'text-indigo-500'"
                         x-text="phase.pr.state === 'closed' ? 'MERGED' : 'OPEN'"></span>
                 </div>
               </template>
 
               <!-- Blockers info -->
               <template x-if="phase.blockers && phase.blockers.length > 0 && !phase.is_closed">
-                <div class="text-[11px] text-slate-400 flex items-center gap-1">
-                  <i data-lucide="lock" class="w-3 h-3 text-amber-400"></i>
-                  <span>وابسته به: <span class="font-mono text-amber-300" x-text="phase.blockers.map(b => '#' + b).join(', ')"></span></span>
+                <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <i data-lucide="lock" class="w-3 h-3 text-amber-500"></i>
+                  <span><span x-text="t('phase_blocked_by')"></span> <span class="font-mono text-amber-600 dark:text-amber-300" x-text="phase.blockers.map(b => '#' + b).join(', ')"></span></span>
                 </div>
               </template>
 
               <!-- Completed badge -->
               <template x-if="phase.is_closed">
-                <div class="text-[11px] text-emerald-400 flex items-center gap-1 font-semibold">
+                <div class="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
                   <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
-                  <span>با موفقیت تحویل و مرج شد</span>
+                  <span x-text="t('phase_completed_msg')"></span>
                 </div>
               </template>
 
               <!-- Live Agent Console Button -->
               <template x-if="phase.is_active || phase.conversation_id || phase.status === 'IN_PROGRESS' || phase.status === 'HEALING'">
                 <button type="button" @click="openConsoleDrawer(phase.conversation_id)"
-                        class="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm">
-                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-400"></i>
-                  <span>کنسول و چت زنده با ایجنت</span>
+                        class="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 hover:bg-indigo-600 dark:hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-700 dark:text-indigo-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm">
+                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400"></i>
+                  <span x-text="t('phase_console_btn')"></span>
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </button>
               </template>
@@ -492,20 +547,20 @@
     <!-- TAB 3: TEMPLATES -->
     <div x-show="activeTab === 'templates'" x-cloak class="grid grid-cols-1 md:grid-cols-3 gap-6">
       <template x-for="tmpl in templates" :key="tmpl.id">
-        <div class="glass p-6 rounded-2xl flex flex-col justify-between gap-4 border border-white/5 hover:border-brand-500/40 transition-all duration-300">
+        <div class="glass p-6 rounded-2xl flex flex-col justify-between gap-4 border border-slate-200 dark:border-white/5 hover:border-brand-500/40 transition-all duration-300 shadow-sm">
           <div>
-            <div class="w-12 h-12 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-400 flex items-center justify-center mb-4">
+            <div class="w-12 h-12 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-600 dark:text-brand-400 flex items-center justify-center mb-4">
               <i :data-lucide="tmpl.icon || 'code'" class="w-6 h-6"></i>
             </div>
-            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-dark-800 text-slate-400 border border-white/5" x-text="tmpl.category"></span>
-            <h3 class="font-bold text-base text-white mt-2 mb-1" x-text="tmpl.title"></h3>
-            <p class="text-xs text-slate-400 leading-relaxed" x-text="tmpl.description"></p>
+            <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-dark-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/5" x-text="tmpl.category"></span>
+            <h3 class="font-bold text-base text-slate-900 dark:text-white mt-2 mb-1" x-text="tmpl.title"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed" x-text="tmpl.description"></p>
           </div>
 
           <button @click="applyTemplate(tmpl); activeTab = 'launch'" 
-                  class="w-full py-2.5 rounded-xl bg-dark-800 hover:bg-brand-600 text-slate-200 hover:text-white text-xs font-semibold border border-white/10 transition-colors flex items-center justify-center gap-1.5">
+                  class="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-dark-800 hover:bg-brand-600 text-slate-700 dark:text-slate-200 hover:text-white text-xs font-semibold border border-slate-200 dark:border-white/10 transition-colors flex items-center justify-center gap-1.5 shadow-sm">
             <i data-lucide="arrow-right" class="w-4 h-4"></i>
-            <span>استفاده و پرتاب این پروژه</span>
+            <span x-text="t('use_template_btn')"></span>
           </button>
         </div>
       </template>
@@ -515,62 +570,62 @@
 
   <!-- Track Modal -->
   <div x-show="showTrackModal" x-cloak class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="glass max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 border border-white/10" @click.outside="showTrackModal = false">
-      <h3 class="font-bold text-base text-white">افزودن مخزن موجود به داشبورد</h3>
-      <p class="text-xs text-slate-400">نام مخزن را در قالب owner/repo وارد کنید تا مانیتورینگ فازهای آن به داشبورد اضافه شود:</p>
-      <input type="text" x-model="trackRepoInput" placeholder="ali-ahadi1105/my-repo" dir="ltr"
-             class="w-full bg-dark-800 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-brand-500">
+    <div class="glass max-w-md w-full p-6 rounded-2xl flex flex-col gap-4 border border-slate-200 dark:border-white/10 shadow-2xl" @click.outside="showTrackModal = false">
+      <h3 class="font-bold text-base text-slate-900 dark:text-white" x-text="t('track_modal_title')"></h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400" x-text="t('track_modal_desc')"></p>
+      <input type="text" x-model="trackRepoInput" :placeholder="t('track_repo_placeholder')" dir="ltr"
+             class="w-full bg-white dark:bg-dark-800 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
       <div class="flex items-center gap-2 justify-end">
-        <button @click="showTrackModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">انصراف</button>
-        <button @click="trackRepo()" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold">افزودن به مانیتورینگ</button>
+        <button @click="showTrackModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" x-text="t('cancel_btn')"></button>
+        <button @click="trackRepo()" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold" x-text="t('track_submit_btn')"></button>
       </div>
     </div>
   </div>
 
   <!-- Accounts Management Modal -->
   <div x-show="showAccountsModal" x-cloak class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-    <div class="glass max-w-2xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-white/10 my-8 shadow-2xl" @click.outside="showAccountsModal = false">
+    <div class="glass max-w-2xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-slate-200 dark:border-white/10 my-8 shadow-2xl" @click.outside="showAccountsModal = false">
       
       <!-- Modal Header -->
-      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+          <div class="w-10 h-10 rounded-xl bg-brand-600/10 dark:bg-brand-600/20 text-brand-600 dark:text-brand-400 flex items-center justify-center border border-brand-500/30 shrink-0">
             <i data-lucide="github" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="font-bold text-base text-white">مدیریت اکانت‌ها و توکن‌های گیت‌هاب (GitHub Accounts)</h3>
-            <p class="text-xs text-slate-400">می‌توانید توکن‌های Personal Access Token را برای حساب‌های مختلف ثبت و اکانت فعال را جابجا کنید.</p>
+            <h3 class="font-bold text-base text-slate-900 dark:text-white" x-text="t('accounts_modal_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400" x-text="t('accounts_modal_desc')"></p>
           </div>
         </div>
-        <button @click="showAccountsModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5">
+        <button @click="showAccountsModal = false" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
       <!-- Configured Accounts List -->
       <div class="flex flex-col gap-3">
-        <label class="text-xs font-semibold text-slate-300">اکانت‌های متصل شده:</label>
+        <label class="text-xs font-semibold text-slate-700 dark:text-slate-300" x-text="t('connected_accounts_label')"></label>
         <div class="flex flex-col gap-2 max-h-56 overflow-y-auto pr-1">
           <template x-for="acc in accounts" :key="acc.login">
-            <div class="p-3 rounded-xl bg-dark-800/80 border border-white/10 flex items-center justify-between gap-3 flex-wrap">
+            <div class="p-3 rounded-xl bg-white dark:bg-dark-800/80 border border-slate-200 dark:border-white/10 flex items-center justify-between gap-3 flex-wrap shadow-sm">
               <div class="flex items-center gap-3">
-                <img :src="acc.avatar_url" class="w-9 h-9 rounded-full border border-white/10 shrink-0">
+                <img :src="acc.avatar_url" class="w-9 h-9 rounded-full border border-slate-200 dark:border-white/10 shrink-0">
                 <div>
                   <div class="flex items-center gap-2">
-                    <span class="font-bold text-sm text-white" x-text="'@' + acc.login"></span>
+                    <span class="font-bold text-sm text-slate-900 dark:text-white" x-text="'@' + acc.login"></span>
                     <template x-if="acc.is_active">
-                      <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
+                      <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold border border-emerald-500/30 flex items-center gap-1">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        اکانت فعال
+                        <span x-text="t('active_account_badge')"></span>
                       </span>
                     </template>
                   </div>
-                  <div class="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                  <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     <span x-text="acc.name"></span>
-                    <span class="text-slate-600">•</span>
-                    <span class="font-mono text-[11px] text-slate-500" x-text="acc.masked_token"></span>
+                    <span>•</span>
+                    <span class="font-mono text-[11px] text-slate-400 dark:text-slate-500" x-text="acc.masked_token"></span>
                     <template x-if="acc.label">
-                      <span class="px-1.5 py-0.2 rounded bg-dark-700 text-[10px] text-slate-300" x-text="acc.label"></span>
+                      <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-dark-700 text-[10px] text-slate-600 dark:text-slate-300" x-text="acc.label"></span>
                     </template>
                   </div>
                 </div>
@@ -578,26 +633,26 @@
 
               <div class="flex items-center gap-2">
                 <button type="button" @click="testAccount(acc.login)" :disabled="testingAccountLogin === acc.login"
-                        class="px-2.5 py-1.5 rounded-lg bg-dark-700 hover:bg-dark-600 text-xs text-slate-300 hover:text-white flex items-center gap-1 transition">
+                        class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 dark:hover:bg-dark-600 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1 transition">
                   <template x-if="testingAccountLogin !== acc.login">
-                    <i data-lucide="check" class="w-3.5 h-3.5 text-slate-400"></i>
+                    <i data-lucide="check" class="w-3.5 h-3.5 text-slate-500"></i>
                   </template>
                   <template x-if="testingAccountLogin === acc.login">
-                    <div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    <div class="w-3.5 h-3.5 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
                   </template>
-                  <span>تست اتصال</span>
+                  <span x-text="t('test_connection_btn')"></span>
                 </button>
 
                 <template x-if="!acc.is_active">
                   <button type="button" @click="activateAccount(acc.login)"
-                          class="px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white transition">
-                    انتخاب فعال
+                          class="px-2.5 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-xs font-semibold text-white transition"
+                          x-text="t('set_active_btn')">
                   </button>
                 </template>
 
                 <button type="button" @click="deleteAccount(acc.login)"
-                        class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                        title="حذف اکانت">
+                        class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-500 transition"
+                        title="Delete">
                   <i data-lucide="trash-2" class="w-4 h-4"></i>
                 </button>
               </div>
@@ -605,47 +660,44 @@
           </template>
 
           <template x-if="accounts.length === 0">
-            <div class="p-4 rounded-xl bg-dark-800/50 border border-dashed border-white/10 text-center text-xs text-slate-400">
-              هنوز اکانتی ثبت نشده است. لطفاً توکن گیت‌هاب خود را در فرم زیر وارد کنید.
+            <div class="p-4 rounded-xl bg-slate-50 dark:bg-dark-800/50 border border-dashed border-slate-300 dark:border-white/10 text-center text-xs text-slate-500 dark:text-slate-400"
+                 x-text="t('no_accounts_registered')">
             </div>
           </template>
         </div>
       </div>
 
       <!-- Add Account Form -->
-      <div class="p-4 rounded-xl bg-dark-800 border border-brand-500/30 flex flex-col gap-3">
-        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
-          <i data-lucide="key" class="w-4 h-4 text-brand-400"></i>
-          <span>افزودن اکانت یا توکن گیت‌هاب جدید:</span>
+      <div class="p-4 rounded-xl bg-slate-50 dark:bg-dark-800 border border-brand-500/30 flex flex-col gap-3">
+        <h4 class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+          <i data-lucide="key" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+          <span x-text="t('add_account_form_title')"></span>
         </h4>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[11px] font-semibold text-slate-300">توکن دسترسی شخصی (GitHub Personal Access Token)</label>
+          <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300" x-text="t('token_label')"></label>
           <div class="relative flex items-center" dir="ltr">
             <input :type="showTokenInput ? 'text' : 'password'" x-model="newAccountForm.token"
                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx or github_pat_..."
-                   class="w-full bg-dark-900 border border-white/10 rounded-xl py-2.5 pl-3 pr-10 font-mono text-xs text-white focus:outline-none focus:border-brand-500">
+                   class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-3 pr-10 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             <button type="button" @click="showTokenInput = !showTokenInput" 
-                    class="absolute right-2 text-slate-400 hover:text-slate-200 p-1">
+                    class="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
               <i :data-lucide="showTokenInput ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
             </button>
           </div>
-          <p class="text-[10px] text-slate-400 leading-normal">
-            توکن حداقل نیازمند دسترسی‌های <code class="text-brand-300 bg-white/5 px-1 py-0.5 rounded">repo</code> و <code class="text-brand-300 bg-white/5 px-1 py-0.5 rounded">workflow</code> می‌باشد. 
-            (<a href="https://github.com/settings/tokens" target="_blank" class="text-brand-400 hover:underline">ایجاد توکن جدید در گیت‌هاب</a>)
-          </p>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-normal" x-text="t('token_scope_hint')"></p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="text-[11px] font-semibold text-slate-300 mb-1 block">برچسب / نام مستعار (اختیاری)</label>
-            <input type="text" x-model="newAccountForm.label" placeholder="مثلاً: اکانت شرکتی، بات دیپلوی، شخصی"
-                   class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+            <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 block" x-text="t('label_label')"></label>
+            <input type="text" x-model="newAccountForm.label" :placeholder="t('label_placeholder')"
+                   class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
           </div>
           <div class="flex items-end pb-2">
-            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
-              <input type="checkbox" x-model="newAccountForm.set_active" class="rounded bg-dark-900 border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
-              <span>تنظیم بلافاصله به عنوان اکانت فعال</span>
+            <label class="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" x-model="newAccountForm.set_active" class="rounded bg-white dark:bg-dark-900 border-slate-300 dark:border-white/20 text-brand-600 focus:ring-0 w-4 h-4">
+              <span x-text="t('set_active_immediately')"></span>
             </label>
           </div>
         </div>
@@ -655,22 +707,21 @@
           <template x-if="!isAddingAccount">
             <div class="flex items-center gap-1.5">
               <i data-lucide="shield-check" class="w-4 h-4"></i>
-              <span>اعتبارسنجی و ذخیره اکانت</span>
+              <span x-text="t('save_account_btn')"></span>
             </div>
           </template>
           <template x-if="isAddingAccount">
             <div class="flex items-center gap-1.5">
               <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              <span>در حال اعتبارسنجی با گیت‌هاب...</span>
+              <span x-text="t('validating_account')"></span>
             </div>
           </template>
         </button>
       </div>
 
       <!-- Modal Footer -->
-      <div class="flex items-center justify-end border-t border-white/10 pt-3">
-        <button type="button" @click="showAccountsModal = false" class="px-5 py-2 rounded-xl text-xs text-slate-300 hover:text-white bg-dark-800 hover:bg-dark-700 transition">
-          بستن
+      <div class="flex items-center justify-end border-t border-slate-200 dark:border-white/10 pt-3">
+        <button type="button" @click="showAccountsModal = false" class="px-5 py-2 rounded-xl text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-slate-100 dark:bg-dark-800 hover:bg-slate-200 dark:hover:bg-dark-700 transition" x-text="t('close_btn')">
         </button>
       </div>
 
@@ -679,36 +730,36 @@
 
   <!-- Engine Settings Modal (Local vs OpenHands Cloud) -->
   <div x-show="showEngineModal" x-cloak class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-    <div class="glass max-w-xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-white/10 my-8 shadow-2xl" @click.outside="showEngineModal = false">
+    <div class="glass max-w-xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-slate-200 dark:border-white/10 my-8 shadow-2xl" @click.outside="showEngineModal = false">
       
-      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+      <div class="flex items-center justify-between border-b border-slate-200 dark:border-white/10 pb-4">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+          <div class="w-10 h-10 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center border border-indigo-500/30 shrink-0">
             <i data-lucide="sliders" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="font-bold text-base text-white">تنظیمات موتور هوش مصنوعی (OpenHands Engine)</h3>
-            <p class="text-xs text-slate-400">جابجایی بین سرور محلی (Local Docker/CLI) و کلاود OpenHands Cloud</p>
+            <h3 class="font-bold text-base text-slate-900 dark:text-white" x-text="t('engine_modal_title')"></h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400" x-text="t('engine_modal_desc')"></p>
           </div>
         </div>
-        <button @click="showEngineModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5">
+        <button @click="showEngineModal = false" class="text-slate-400 hover:text-slate-900 dark:hover:text-white p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
 
       <!-- Mode Selector Tabs -->
-      <div class="grid grid-cols-2 gap-3 p-1 rounded-xl bg-dark-800 border border-white/10">
+      <div class="grid grid-cols-2 gap-3 p-1 rounded-xl bg-slate-100 dark:bg-dark-800 border border-slate-200 dark:border-white/10">
         <button type="button" @click="engineForm.mode = 'local'"
                 class="py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
-                :class="engineForm.mode === 'local' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                :class="engineForm.mode === 'local' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'">
           <i data-lucide="server" class="w-4 h-4"></i>
-          <span>سرور محلی (Local Engine)</span>
+          <span x-text="t('engine_mode_local')"></span>
         </button>
         <button type="button" @click="engineForm.mode = 'cloud'"
                 class="py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
-                :class="engineForm.mode === 'cloud' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+                :class="engineForm.mode === 'cloud' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'">
           <i data-lucide="cloud" class="w-4 h-4"></i>
-          <span>کلاود (OpenHands Cloud)</span>
+          <span x-text="t('engine_mode_cloud')"></span>
         </button>
       </div>
 
@@ -717,16 +768,14 @@
         <template x-if="engineForm.mode === 'local'">
           <div class="flex flex-col gap-3">
             <div>
-              <label class="text-xs font-semibold text-slate-300 mb-1 block">آدرس سرور محلی (Local Base URL)</label>
+              <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block" x-text="t('local_url_label')"></label>
               <input type="text" x-model="engineForm.local_base_url" placeholder="http://127.0.0.1:8000" dir="ltr"
-                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
-              <p class="text-[11px] text-slate-400 mt-1">پورت اینگرس پیش‌فرض OpenHands عدد ۸۰۰۰ یا ۱۸۰۰۰ است.</p>
+                     class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-300 mb-1 block">کلید نشست / توکن محلی (اختیاری)</label>
-              <input type="password" x-model="engineForm.local_api_key" placeholder="کلید از پیش خوانده شده از فایل محلی" dir="ltr"
-                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
-              <p class="text-[11px] text-slate-400 mt-1">در صورت خالی ماندن، کلید به صورت خودکار از <code class="text-indigo-300">~/.openhands/agent-canvas/api-key.txt</code> خوانده می‌شود.</p>
+              <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block" x-text="t('local_key_label')"></label>
+              <input type="password" x-model="engineForm.local_api_key" placeholder="Optional session key" dir="ltr"
+                     class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             </div>
           </div>
         </template>
@@ -734,38 +783,36 @@
         <template x-if="engineForm.mode === 'cloud'">
           <div class="flex flex-col gap-3">
             <div>
-              <label class="text-xs font-semibold text-slate-300 mb-1 block">آدرس کلاود (Cloud API URL)</label>
+              <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block" x-text="t('cloud_url_label')"></label>
               <input type="text" x-model="engineForm.cloud_base_url" placeholder="https://app.all-hands.dev" dir="ltr"
-                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
+                     class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             </div>
             <div>
-              <label class="text-xs font-semibold text-slate-300 mb-1 block">کلید دسترسی OpenHands Cloud API Key</label>
+              <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1 block" x-text="t('cloud_key_label')"></label>
               <input type="password" x-model="engineForm.cloud_api_key" placeholder="oh_api_pat_..." dir="ltr"
-                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
-              <p class="text-[11px] text-slate-400 mt-1">می‌توانید توکن خود را از بخش Settings در <a href="https://app.all-hands.dev" target="_blank" class="text-brand-400 hover:underline">پنل OpenHands Cloud</a> دریافت کنید.</p>
+                     class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             </div>
           </div>
         </template>
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center justify-between border-t border-white/10 pt-4">
+      <div class="flex items-center justify-between border-t border-slate-200 dark:border-white/10 pt-4">
         <button type="button" @click="testEngineConnection()" :disabled="isTestingEngine"
-                class="px-4 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-xs text-slate-300 hover:text-white flex items-center gap-1.5 transition">
+                class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-dark-800 hover:bg-slate-200 dark:hover:bg-dark-700 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition">
           <template x-if="!isTestingEngine">
-            <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            <i data-lucide="check" class="w-4 h-4 text-emerald-500"></i>
           </template>
           <template x-if="isTestingEngine">
-            <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <div class="w-4 h-4 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
           </template>
-          <span>تست اتصال</span>
+          <span x-text="t('test_connection_btn')"></span>
         </button>
 
         <div class="flex items-center gap-2">
-          <button type="button" @click="showEngineModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">انصراف</button>
+          <button type="button" @click="showEngineModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white" x-text="t('cancel_btn')"></button>
           <button type="button" @click="saveEngineConfig()"
-                  class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition">
-            ذخیره تنظیمات
+                  class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition" x-text="t('save_engine_btn')">
           </button>
         </div>
       </div>
@@ -775,30 +822,30 @@
 
   <!-- Live Agent Console & Interactive Chat Drawer -->
   <div x-show="showConsoleDrawer" x-cloak class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-start">
-    <div class="w-full max-w-4xl bg-dark-900 border-l border-white/10 h-full flex flex-col shadow-2xl transition-all duration-300" @click.outside="closeConsoleDrawer()">
+    <div class="w-full max-w-4xl bg-white dark:bg-dark-900 border-l border-slate-200 dark:border-white/10 h-full flex flex-col shadow-2xl transition-all duration-300" @click.outside="closeConsoleDrawer()">
       
       <!-- Drawer Top Header -->
-      <div class="p-4 border-b border-white/10 bg-dark-800/80 flex items-center justify-between flex-wrap gap-3">
+      <div class="p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-dark-800/80 flex items-center justify-between flex-wrap gap-3">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+          <div class="w-10 h-10 rounded-xl bg-brand-600/10 dark:bg-brand-600/20 text-brand-600 dark:text-brand-400 flex items-center justify-center border border-brand-500/30 shrink-0">
             <i data-lucide="terminal" class="w-5 h-5"></i>
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="font-bold text-sm text-white">کنسول زنده و هدایت تعاملی ایجنت (HITL Console)</h3>
+              <h3 class="font-bold text-sm text-slate-900 dark:text-white" x-text="t('console_title')"></h3>
               <!-- Live status badge -->
               <template x-if="activeConversation">
                 <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
                       :class="{
-                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse': activeConversation.status === 'running',
-                        'bg-amber-500/20 text-amber-300 border border-amber-500/30': activeConversation.status === 'paused',
-                        'bg-slate-700/40 text-slate-300 border border-slate-600/30': activeConversation.status === 'finished',
-                        'bg-rose-500/20 text-rose-300 border border-rose-500/30': activeConversation.status === 'error' || activeConversation.status === 'interrupted'
+                        'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 animate-pulse': activeConversation.status === 'running',
+                        'bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30': activeConversation.status === 'paused',
+                        'bg-slate-200 dark:bg-slate-700/40 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600/30': activeConversation.status === 'finished',
+                        'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30': activeConversation.status === 'error' || activeConversation.status === 'interrupted'
                       }"
                       x-text="activeConversation.status || 'running'"></span>
               </template>
             </div>
-            <p class="text-[11px] text-slate-400 mt-0.5">مشاهده لاگ‌ها و تفکرات ایجنت، ارسال پرامپت اصلاحی و توقف اضطراری</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5" x-text="t('console_subtitle')"></p>
           </div>
         </div>
 
@@ -806,52 +853,52 @@
         <div class="flex items-center gap-2">
           <!-- Emergency Interrupt Button -->
           <button type="button" @click="interruptAgent()" :disabled="isInterrupting || !activeConversationId"
-                  class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-500 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                  title="توقف اضطراری حلقه اجرای ایجنت">
-            <i data-lucide="octagon-alert" class="w-4 h-4 text-rose-400"></i>
-            <span>توقف اضطراری (Interrupt)</span>
+                  class="px-3 py-1.5 rounded-xl bg-rose-600/10 dark:bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 text-rose-600 dark:text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  :title="t('console_interrupt_btn')">
+            <i data-lucide="octagon-alert" class="w-4 h-4 text-rose-500"></i>
+            <span x-text="t('console_interrupt_btn')"></span>
           </button>
 
           <!-- Resume / Run Button -->
           <button type="button" @click="resumeAgent()" :disabled="!activeConversationId"
-                  class="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
-                  title="ادامه اجرای ایجنت">
-            <i data-lucide="play" class="w-4 h-4 text-emerald-400"></i>
-            <span>ادامه اجرا (Run)</span>
+                  class="px-3 py-1.5 rounded-xl bg-emerald-600/10 dark:bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  :title="t('console_resume_btn')">
+            <i data-lucide="play" class="w-4 h-4 text-emerald-500"></i>
+            <span x-text="t('console_resume_btn')"></span>
           </button>
 
           <!-- Refresh button -->
           <button type="button" @click="fetchEvents(activeConversationId)" 
-                  class="p-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 hover:text-white transition">
-            <i data-lucide="refresh-cw" class="w-4 h-4" :class="isEventsLoading ? 'animate-spin text-brand-400' : ''"></i>
+                  class="p-2 rounded-xl bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 dark:hover:bg-dark-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4" :class="isEventsLoading ? 'animate-spin text-brand-500' : ''"></i>
           </button>
 
           <!-- Open in Web UI -->
           <a :href="getOpenHandsWebUrl(activeConversationId)" target="_blank"
-             class="p-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 hover:text-white transition"
-             title="باز کردن در رابط وب OpenHands">
+             class="p-2 rounded-xl bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 dark:hover:bg-dark-600 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
+             :title="t('console_openhands_link')">
             <i data-lucide="external-link" class="w-4 h-4"></i>
           </a>
 
           <!-- Close drawer -->
-          <button type="button" @click="closeConsoleDrawer()" class="p-2 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition">
+          <button type="button" @click="closeConsoleDrawer()" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
       </div>
 
       <!-- Conversation Selector Bar -->
-      <div class="px-4 py-2 bg-dark-800/40 border-b border-white/5 flex items-center justify-between gap-3 text-xs">
+      <div class="px-4 py-2 bg-slate-100 dark:bg-dark-800/40 border-b border-slate-200 dark:border-white/5 flex items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-2 flex-1">
-          <span class="text-slate-400 shrink-0 font-medium">گفتگوی فعال:</span>
+          <span class="text-slate-500 dark:text-slate-400 shrink-0 font-medium" x-text="t('active_conversation_label')"></span>
           <select x-model="activeConversationId" @change="selectConversation(activeConversationId)"
-                  class="bg-dark-900 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-brand-500 max-w-md w-full">
+                  class="bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 max-w-md w-full shadow-sm">
             <template x-for="conv in openhandsConversations" :key="conv.id">
               <option :value="conv.id" x-text="conv.title + ' (' + conv.status + ')'" :selected="conv.id === activeConversationId"></option>
             </template>
           </select>
         </div>
-        <span class="font-mono text-[10px] text-slate-500" x-text="activeConversationId"></span>
+        <span class="font-mono text-[10px] text-slate-400 dark:text-slate-500" x-text="activeConversationId"></span>
       </div>
 
       <!-- Body: Event Log Stream -->
@@ -859,65 +906,65 @@
         <template x-if="isEventsLoading && conversationEvents.length === 0">
           <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
             <div class="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-            <span class="text-xs">در حال بارگذاری جریان رویدادهای ایجنت...</span>
+            <span class="text-xs" x-text="t('console_loading')"></span>
           </div>
         </template>
 
         <template x-if="conversationEvents.length === 0 && !isEventsLoading">
-          <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-500">
-            <i data-lucide="inbox" class="w-8 h-8 text-slate-600"></i>
-            <span class="text-xs">هیچ رویدادی برای این گفتگو ثبت نشده است.</span>
+          <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
+            <i data-lucide="inbox" class="w-8 h-8 text-slate-400 dark:text-slate-600"></i>
+            <span class="text-xs" x-text="t('console_empty')"></span>
           </div>
         </template>
 
         <!-- Stream items -->
         <template x-for="evt in conversationEvents" :key="evt.id">
-          <div class="flex flex-col rounded-xl border transition-all text-xs overflow-hidden shrink-0"
+          <div class="flex flex-col rounded-xl border transition-all text-xs overflow-hidden shrink-0 shadow-sm"
                style="flex-shrink: 0;"
                :class="{
-                 'bg-dark-800/90 border-indigo-500/30': evt.type === 'command',
-                 'bg-slate-900 border-white/5': evt.type === 'output',
-                 'bg-rose-950/30 border-rose-600/40': evt.type === 'error',
-                 'bg-brand-950/20 border-brand-500/30': evt.type === 'thought',
-                 'bg-emerald-950/20 border-emerald-500/30': evt.type === 'finish',
-                 'bg-indigo-950/40 border-indigo-500/40': evt.type === 'user_message',
-                 'bg-purple-950/30 border-purple-500/40': evt.type === 'agent_message'
+                 'bg-white dark:bg-dark-800/90 border-slate-200 dark:border-indigo-500/30': evt.type === 'command',
+                 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-white/5': evt.type === 'output',
+                 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-600/40': evt.type === 'error',
+                 'bg-purple-50 dark:bg-brand-950/20 border-purple-200 dark:border-brand-500/30': evt.type === 'thought',
+                 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-500/30': evt.type === 'finish',
+                 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/40': evt.type === 'user_message',
+                 'bg-indigo-50/50 dark:bg-purple-950/30 border-slate-200 dark:border-purple-500/40': evt.type === 'agent_message'
                }">
             
             <!-- Event Header -->
-            <div class="px-3 py-2 flex items-center justify-between bg-white/[0.02] border-b border-white/5 text-[11px]">
+            <div class="px-3 py-2 flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 text-[11px]">
               <div class="flex items-center gap-2">
                 <!-- Icon by type -->
                 <template x-if="evt.type === 'command'">
-                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"></i>
                 </template>
                 <template x-if="evt.type === 'output'">
-                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0"></i>
                 </template>
                 <template x-if="evt.type === 'error'">
-                  <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-rose-400 shrink-0"></i>
+                  <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0"></i>
                 </template>
                 <template x-if="evt.type === 'thought'">
-                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400 shrink-0"></i>
+                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0"></i>
                 </template>
                 <template x-if="evt.type === 'user_message'">
-                  <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                  <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
                 </template>
                 <template x-if="evt.type === 'agent_message'">
-                  <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                  <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"></i>
                 </template>
 
-                <span class="font-bold text-slate-200" x-text="evt.title"></span>
+                <span class="font-bold text-slate-800 dark:text-slate-200" x-text="evt.title"></span>
               </div>
-              <span class="font-mono text-[10px] text-slate-500" x-text="formatTimestamp(evt.timestamp)"></span>
+              <span class="font-mono text-[10px] text-slate-400 dark:text-slate-500" x-text="formatTimestamp(evt.timestamp)"></span>
             </div>
 
             <!-- Thought (if present) -->
             <template x-if="evt.thought && evt.type !== 'thought'">
-              <div class="px-3 py-2 bg-purple-950/20 border-b border-white/5 text-[11px] text-purple-200/90 leading-relaxed">
-                <div class="flex items-center gap-1 font-semibold text-purple-300 text-[10px] mb-1">
+              <div class="px-3 py-2 bg-purple-50/60 dark:bg-purple-950/20 border-b border-purple-200 dark:border-white/5 text-[11px] text-purple-900 dark:text-purple-200/90 leading-relaxed">
+                <div class="flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 text-[10px] mb-1">
                   <i data-lucide="brain" class="w-3 h-3"></i>
-                  <span>تفکر و قصد ایجنت:</span>
+                  <span x-text="t('agent_thought_label')"></span>
                 </div>
                 <p class="whitespace-pre-wrap font-sans" x-text="evt.thought"></p>
               </div>
@@ -926,32 +973,32 @@
             <!-- Event Content / Body -->
             <div class="p-3">
               <template x-if="evt.type === 'command'">
-                <div class="font-mono text-[11px] text-emerald-300 bg-black/40 p-2.5 rounded-lg border border-white/5 overflow-x-auto" dir="ltr" x-text="evt.content"></div>
+                <div class="font-mono text-[11px] text-emerald-400 bg-slate-900 p-2.5 rounded-lg border border-slate-800 overflow-x-auto shadow-inner" dir="ltr" x-text="evt.content"></div>
               </template>
 
               <template x-if="evt.type === 'output' || evt.type === 'error'">
-                <pre class="font-mono text-[11px] p-2.5 rounded-lg bg-black/50 border border-white/5 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight"
-                     :class="evt.type === 'error' ? 'text-rose-300' : 'text-slate-300'"
-                     dir="ltr" x-text="evt.content || '(بدون خروجی متنی)'"></pre>
+                <pre class="font-mono text-[11px] p-2.5 rounded-lg bg-slate-900 border border-slate-800 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight shadow-inner"
+                     :class="evt.type === 'error' ? 'text-rose-400' : 'text-slate-300'"
+                     dir="ltr" x-text="evt.content || '(no text output)'"></pre>
               </template>
 
               <template x-if="evt.type === 'thought'">
-                <p class="font-sans text-xs text-purple-200 whitespace-pre-wrap leading-relaxed" x-text="evt.content"></p>
+                <p class="font-sans text-xs text-purple-900 dark:text-purple-200 whitespace-pre-wrap leading-relaxed" x-text="evt.content"></p>
               </template>
 
               <template x-if="evt.type === 'user_message'">
-                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-200"
-                     x-text="evt.content || '(درخواست اجرای فاز توسط سامانه اتومیشن)'"></div>
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-800 dark:text-emerald-200 font-medium"
+                     x-text="evt.content || '(Phase execution triggered)'"></div>
               </template>
 
               <template x-if="evt.type === 'agent_message'">
-                <div class="text-xs leading-relaxed whitespace-pre-wrap text-slate-200"
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-slate-800 dark:text-slate-200"
                      x-text="evt.content"></div>
               </template>
 
               <template x-if="evt.type === 'finish'">
-                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-300 font-semibold"
-                     x-text="evt.content || 'فاز با موفقیت تکمیل شد.'"></div>
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-600 dark:text-emerald-300 font-semibold"
+                     x-text="evt.content || 'Phase finished successfully.'"></div>
               </template>
             </div>
 
@@ -960,26 +1007,26 @@
       </div>
 
       <!-- Footer: Quick Prompts & Interactive Input -->
-      <div class="p-4 border-t border-white/10 bg-dark-800/90 flex flex-col gap-3">
+      <div class="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-dark-800/90 flex flex-col gap-3">
         
         <!-- Quick Hint Pills -->
         <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
-          <span class="text-slate-400 shrink-0 font-medium ml-1">راهنمایی‌های سریع:</span>
-          <button type="button" @click="sendQuickPrompt('لطفاً تست‌ها را بدون محاسبه کاوریج اجرا کن: npm test -- --coverage=false')"
-                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
-            ⚡ تست بدون کاوریج
+          <span class="text-slate-500 dark:text-slate-400 shrink-0 font-medium ml-1" x-text="t('quick_hints_label')"></span>
+          <button type="button" @click="sendQuickPrompt(t('pill_prompt_1'))"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 transition shadow-sm"
+                  x-text="t('pill_title_1')">
           </button>
-          <button type="button" @click="sendQuickPrompt('تست‌ها را با فلگ --passWithNoTests اجرا کن تا گیر نکند')"
-                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
-            ⏭️ تست با --passWithNoTests
+          <button type="button" @click="sendQuickPrompt(t('pill_prompt_2'))"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 transition shadow-sm"
+                  x-text="t('pill_title_2')">
           </button>
-          <button type="button" @click="sendQuickPrompt('خطای جاری را نادیده بگیر و ادامه مراحل را اجرا کن')"
-                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
-            🛡️ نادیده گرفتن خطا
+          <button type="button" @click="sendQuickPrompt(t('pill_prompt_3'))"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 transition shadow-sm"
+                  x-text="t('pill_title_3')">
           </button>
-          <button type="button" @click="sendQuickPrompt('وضعیت اجرای فعلی چیست و در چه مرحله‌ای هستی؟')"
-                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
-            ❓ گزارش وضعیت
+          <button type="button" @click="sendQuickPrompt(t('pill_prompt_4'))"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-white dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 border border-slate-200 dark:border-white/5 text-slate-700 dark:text-slate-300 transition shadow-sm"
+                  x-text="t('pill_title_4')">
           </button>
         </div>
 
@@ -987,8 +1034,8 @@
         <div class="flex items-center gap-2">
           <div class="relative flex-1">
             <input type="text" x-model="chatInput" @keydown.enter="sendChatMessage()"
-                   placeholder="پیام یا دستور مداخله برای ایجنت بنویسید (مثلاً: تست فلان کامپوننت را موقتا کامنت کن)..."
-                   class="w-full bg-dark-900 border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
+                   :placeholder="t('console_chat_placeholder')"
+                   class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 px-4 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-brand-500 shadow-sm">
           </div>
           
           <button type="button" @click="sendChatMessage()" :disabled="isSendingChat || !chatInput.trim() || !activeConversationId"
@@ -996,13 +1043,13 @@
             <template x-if="!isSendingChat">
               <div class="flex items-center gap-1.5">
                 <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                <span>ارسال پیام</span>
+                <span x-text="t('console_send_btn')"></span>
               </div>
             </template>
             <template x-if="isSendingChat">
               <div class="flex items-center gap-1.5">
                 <div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span>در حال ارسال...</span>
+                <span x-text="t('sending_msg')"></span>
               </div>
             </template>
           </button>
@@ -1014,6 +1061,238 @@
   </div>
 
   <script>
+    const translations = {
+      fa: {
+        app_title: "OpenHands Software Factory",
+        app_badge: "v2.0 خودکار",
+        app_subtitle: "داشبورد خودکار سفارش و مانیتورینگ خط تولید نرم‌افزار",
+        switch_to_light: "تغییر به تم لایت",
+        switch_to_dark: "تغییر به تم دارک",
+        theme_light: "لایت",
+        theme_dark: "دارک",
+        accounts_btn: "اکانت‌ها",
+        engine_btn: "موتور",
+        connect_github: "اتصال گیت‌هاب",
+        openhands_local: "OpenHands محلی",
+        openhands_cloud: "OpenHands ابری",
+        live_console_btn: "کنسول و چت زنده ایجنت",
+
+        tab_launch: "سفارش پروژه جدید (Launch)",
+        tab_pipeline: "پروژه‌ها و خط تولید زنده (Pipelines)",
+        tab_templates: "قالب‌های آماده (Templates)",
+
+        launch_card_title: "تعریف ایده و پرتاب پروژه به خط تولید خودکار",
+        launch_card_subtitle: "مشخصات پروژه را بنویسید؛ پلنر هوشمند آن را به فازهای مستقل خرد کرده و چرخه ساخت و مرج خودکار را آغاز می‌کند.",
+        account_label: "اکانت گیت‌هاب مالک مخزن (GitHub Owner Account):",
+        add_account_btn: "افزودن اکانت جدید",
+        repo_name_label: "نام مخزن در گیت‌هاب (Repository Name)",
+        repo_name_placeholder: "مثال: ai-notion-clone یا task-manager-saas",
+        visibility_label: "نوع مخزن (Visibility)",
+        visibility_public: "عمومی (Public)",
+        visibility_private: "خصوصی (Private)",
+        quick_templates_label: "انتخاب سریع از قالب‌های آماده:",
+        spec_label: "سند نیازمندی‌ها و فازها (Markdown Specification)",
+        spec_placeholder: "# Project Title\n\n## Phase 1: Foundation\nDescribe requirements...\n\n## Phase 2: Next Feature\nDescribe next requirements...",
+        create_repo_checkbox: "ساخت خودکار مخزن در گیت‌هاب در صورت عدم وجود",
+        install_orchestrator_checkbox: "نصب ورک‌فلو ناظر فازها در GitHub Actions",
+        launch_btn: "پرتاب پروژه به کارخانه نرم‌افزار (Launch Factory)",
+        launching_btn: "در حال ساخت مخزن و شکستن فازها در گیت‌هاب...",
+
+        guide_title: "چرخه خودکار چطور کار می‌کند؟",
+        guide_step1_title: "۱. تفکیک نیازمندی‌ها (DAG):",
+        guide_step1_desc: "مشخصات شما خوانده شده و به فازهای مستقل با وابستگی در قالب Issues گیت‌هاب تبدیل می‌شود.",
+        guide_step2_title: "۲. کدنویسی خودکار:",
+        guide_step2_desc: "ایجنت OpenHands فاز ۱ را بیدار کرده و در یک Branch اختصاصی کد می‌زند و PR باز می‌کند.",
+        guide_step3_title: "۳. ریویو و ترمیم هوشمند (Auto-Heal):",
+        guide_step3_desc: "ایجنت ریویور کد را ارزیابی کرده و در صورت نیاز به اصلاح، سیستم خودکار تا ۳ بار به ایجنت دستور اصلاح می‌دهد.",
+        guide_step4_title: "۴. مرج و آنبلاک فاز بعدی:",
+        guide_step4_desc: "پس از تایید، PR به طور خودکار مرج شده و فاز ۲ بدون دخالت دست باز می‌شود!",
+        tracked_projects_title: "پروژه‌های تحت نظارت",
+        add_repo_btn: "افزودن مخزن",
+
+        pipeline_subtitle: "مانیتورینگ وضعیت خط تولید، فازها، پول‌ریکوئست‌ها و ریویوها",
+        orchestrate_btn: "آنبلاک فازهای آماده (Orchestrate)",
+        healer_btn: "بررسی سلامت و ترمیم PRها (Auto-Heal)",
+        pipeline_progress_title: "پیشرفت کل پروژه",
+        phase_label: "فاز",
+        phase_blocked_by: "وابسته به:",
+        phase_completed_msg: "با موفقیت تحویل و مرج شد",
+        phase_console_btn: "کنسول و چت زنده با ایجنت",
+
+        use_template_btn: "استفاده و پرتاب این پروژه",
+
+        track_modal_title: "افزودن مخزن موجود به داشبورد",
+        track_modal_desc: "نام مخزن را در قالب owner/repo وارد کنید تا مانیتورینگ فازهای آن به داشبورد اضافه شود:",
+        track_repo_placeholder: "ali-ahadi1105/my-repo",
+        track_submit_btn: "افزودن به مانیتورینگ",
+        cancel_btn: "انصراف",
+        close_btn: "بستن",
+
+        accounts_modal_title: "مدیریت اکانت‌ها و توکن‌های گیت‌هاب (GitHub Accounts)",
+        accounts_modal_desc: "می‌توانید توکن‌های Personal Access Token را برای حساب‌های مختلف ثبت و اکانت فعال را جابجا کنید.",
+        connected_accounts_label: "اکانت‌های متصل شده:",
+        active_account_badge: "اکانت فعال",
+        test_connection_btn: "تست اتصال",
+        set_active_btn: "انتخاب فعال",
+        no_accounts_registered: "هنوز اکانتی ثبت نشده است. لطفاً توکن گیت‌هاب خود را در فرم زیر وارد کنید.",
+        add_account_form_title: "افزودن اکانت یا توکن گیت‌هاب جدید:",
+        token_label: "توکن دسترسی شخصی (GitHub Personal Access Token)",
+        token_scope_hint: "توکن حداقل نیازمند دسترسی‌های repo و workflow می‌باشد.",
+        label_label: "برچسب / نام مستعار (اختیاری)",
+        label_placeholder: "مثلاً: اکانت شرکتی، بات دیپلوی، شخصی",
+        set_active_immediately: "تنظیم بلافاصله به عنوان اکانت فعال",
+        save_account_btn: "اعتبارسنجی و ذخیره اکانت",
+        validating_account: "در حال اعتبارسنجی با گیت‌هاب...",
+
+        engine_modal_title: "تنظیمات موتور هوش مصنوعی (OpenHands Engine)",
+        engine_modal_desc: "جابجایی بین سرور محلی (Local Agent Canvas) و کلاود OpenHands Cloud",
+        engine_mode_local: "سرور محلی (Local Engine)",
+        engine_mode_cloud: "کلاود (OpenHands Cloud)",
+        local_url_label: "آدرس سرور محلی (Local Base URL)",
+        local_key_label: "کلید نشست / توکن محلی (اختیاری)",
+        cloud_url_label: "آدرس کلاود (Cloud API URL)",
+        cloud_key_label: "کلید دسترسی OpenHands Cloud API Key",
+        save_engine_btn: "ذخیره تنظیمات",
+
+        console_title: "کنسول زنده و هدایت تعاملی ایجنت (HITL Console)",
+        console_subtitle: "مشاهده لاگ‌ها و تفکرات ایجنت، ارسال پرامپت اصلاحی و توقف اضطراری",
+        console_interrupt_btn: "توقف اضطراری (Interrupt)",
+        console_resume_btn: "ادامه اجرا (Run)",
+        console_openhands_link: "باز کردن در محیط OpenHands",
+        active_conversation_label: "گفتگوی فعال:",
+        console_loading: "در حال بارگذاری جریان رویدادهای ایجنت...",
+        console_empty: "هیچ رویدادی برای این گفتگو ثبت نشده است.",
+        agent_thought_label: "تفکر و قصد ایجنت:",
+        quick_hints_label: "راهنمایی‌های سریع:",
+        pill_title_1: "⚡ تست بدون کاوریج",
+        pill_prompt_1: "لطفاً تست‌ها را بدون محاسبه کاوریج اجرا کن: npm test -- --coverage=false",
+        pill_title_2: "⏭️ تست با --passWithNoTests",
+        pill_prompt_2: "تست‌ها را با فلگ --passWithNoTests اجرا کن تا گیر نکند",
+        pill_title_3: "🛡️ نادیده گرفتن خطا",
+        pill_prompt_3: "خطای جاری را نادیده بگیر و ادامه مراحل را اجرا کن",
+        pill_title_4: "❓ گزارش وضعیت",
+        pill_prompt_4: "وضعیت اجرای فعلی چیست و در چه مرحله‌ای هستی؟",
+        console_chat_placeholder: "پیام یا دستور مداخله برای ایجنت بنویسید (مثلاً: تست فلان کامپوننت را موقتا کامنت کن)...",
+        console_send_btn: "ارسال پیام",
+        sending_msg: "در حال ارسال..."
+      },
+
+      en: {
+        app_title: "OpenHands Software Factory",
+        app_badge: "v2.0 Autonomous",
+        app_subtitle: "Autonomous AI Software Factory & Multi-Agent Orchestration Dashboard",
+        switch_to_light: "Switch to Light Mode",
+        switch_to_dark: "Switch to Dark Mode",
+        theme_light: "Light",
+        theme_dark: "Dark",
+        accounts_btn: "Accounts",
+        engine_btn: "Engine",
+        connect_github: "Connect GitHub",
+        openhands_local: "OpenHands Local",
+        openhands_cloud: "OpenHands Cloud",
+        live_console_btn: "Live Agent Console",
+
+        tab_launch: "Launch New Project",
+        tab_pipeline: "Active Pipelines",
+        tab_templates: "Ready Templates",
+
+        launch_card_title: "Project Specification & Factory Launch",
+        launch_card_subtitle: "Describe your project or feature spec; our autonomous planner decomposes it into a phased DAG and executes to completion.",
+        account_label: "Target GitHub Account:",
+        add_account_btn: "Add New Account",
+        repo_name_label: "GitHub Repository Name",
+        repo_name_placeholder: "e.g. ai-notion-clone or task-manager-saas",
+        visibility_label: "Repository Visibility",
+        visibility_public: "Public",
+        visibility_private: "Private",
+        quick_templates_label: "Quick Architectural Templates:",
+        spec_label: "Requirements Specification (Markdown)",
+        spec_placeholder: "# Project Title\n\n## Phase 1: Foundation\nDescribe requirements...\n\n## Phase 2: Next Feature\nDescribe next requirements...",
+        create_repo_checkbox: "Auto-create GitHub repository if not present",
+        install_orchestrator_checkbox: "Install Phase Orchestrator in GitHub Actions",
+        launch_btn: "Launch Autonomous Software Factory",
+        launching_btn: "Decomposing requirements & launching Phase 1...",
+
+        guide_title: "How the Autonomous Loop Works",
+        guide_step1_title: "1. Requirements DAG:",
+        guide_step1_desc: "Your spec is analyzed and decomposed into ordered, phased issues with cross-dependencies.",
+        guide_step2_title: "2. Autonomous Coding:",
+        guide_step2_desc: "OpenHands implements Phase 1 in an isolated branch and opens a Pull Request.",
+        guide_step3_title: "3. Review & Auto-Healing:",
+        guide_step3_desc: "Review feedback and CI failures are diagnosed automatically with iterative fixes.",
+        guide_step4_title: "4. Phased Progression:",
+        guide_step4_desc: "Merged PRs trigger the orchestrator to unlock Phase 2 until delivery is 100% complete!",
+        tracked_projects_title: "Tracked Projects",
+        add_repo_btn: "Add Repo",
+
+        pipeline_subtitle: "Real-time monitoring of pipelines, phase dependencies, PRs, and agent tasks",
+        orchestrate_btn: "Orchestrate Ready Phases",
+        healer_btn: "Diagnose & Auto-Heal PRs",
+        pipeline_progress_title: "Overall Pipeline Progress",
+        phase_label: "Phase",
+        phase_blocked_by: "Blocked by:",
+        phase_completed_msg: "Successfully delivered and merged",
+        phase_console_btn: "Live Agent Console & Chat",
+
+        use_template_btn: "Use This Template",
+
+        track_modal_title: "Track Repository in Dashboard",
+        track_modal_desc: "Enter repository in owner/repo format to begin pipeline monitoring:",
+        track_repo_placeholder: "ali-ahadi1105/my-repo",
+        track_submit_btn: "Start Monitoring",
+        cancel_btn: "Cancel",
+        close_btn: "Close",
+
+        accounts_modal_title: "GitHub Accounts & Token Management",
+        accounts_modal_desc: "Manage GitHub Personal Access Tokens and switch the active executor account.",
+        connected_accounts_label: "Connected Accounts:",
+        active_account_badge: "Active Account",
+        test_connection_btn: "Test Connection",
+        set_active_btn: "Set Active",
+        no_accounts_registered: "No accounts registered yet. Enter your GitHub PAT below.",
+        add_account_form_title: "Add New GitHub Account / Token:",
+        token_label: "GitHub Personal Access Token (PAT)",
+        token_scope_hint: "Token requires 'repo' and 'workflow' scopes.",
+        label_label: "Display Label (Optional)",
+        label_placeholder: "e.g. Work Org, Personal, Deploy Bot",
+        set_active_immediately: "Set as active account immediately",
+        save_account_btn: "Verify & Save Account",
+        validating_account: "Validating token with GitHub API...",
+
+        engine_modal_title: "OpenHands Engine Settings",
+        engine_modal_desc: "Switch between local workstation execution and OpenHands Cloud backend",
+        engine_mode_local: "Local Engine (Agent Canvas)",
+        engine_mode_cloud: "Cloud Engine (OpenHands Cloud)",
+        local_url_label: "Local Base URL",
+        local_key_label: "Local Session Key (Optional)",
+        cloud_url_label: "Cloud API URL",
+        cloud_key_label: "OpenHands Cloud API Key",
+        save_engine_btn: "Save Settings",
+
+        console_title: "Live Agent Console & HITL Steering",
+        console_subtitle: "Inspect thoughts, stream terminal output, guide with prompts, or trigger emergency interrupt",
+        console_interrupt_btn: "Emergency Interrupt",
+        console_resume_btn: "Resume Run",
+        console_openhands_link: "Open in OpenHands Canvas",
+        active_conversation_label: "Active Conversation:",
+        console_loading: "Streaming live agent events...",
+        console_empty: "No events recorded for this conversation yet.",
+        agent_thought_label: "Agent Reasoning & Intent:",
+        quick_hints_label: "Quick Guidance Prompts:",
+        pill_title_1: "⚡ Test without coverage",
+        pill_prompt_1: "Please run tests without coverage: npm test -- --coverage=false",
+        pill_title_2: "⏭️ Test with --passWithNoTests",
+        pill_prompt_2: "Run tests with --passWithNoTests flag so it doesn't get stuck",
+        pill_title_3: "🛡️ Ignore current error",
+        pill_prompt_3: "Ignore the current error and proceed to the next step",
+        pill_title_4: "❓ Status Report",
+        pill_prompt_4: "What is your current execution status and what step are you on?",
+        console_chat_placeholder: "Type guidance or instructions for the agent (e.g. mock DB in test)...",
+        console_send_btn: "Send Message",
+        sending_msg: "Sending..."
+      }
+    };
+
     function factoryApp() {
       return {
         activeTab: 'pipeline',
@@ -1069,7 +1348,49 @@
           enable_stations: true
         },
 
+        // Theme & Language State
+        currentTheme: localStorage.getItem('factory_theme') || 'dark',
+        currentLang: localStorage.getItem('factory_lang') || 'fa',
+        translations: translations,
+
+        t(key, fallback = '') {
+          const dict = this.translations[this.currentLang] || this.translations['fa'] || {};
+          return dict[key] !== undefined ? dict[key] : (fallback || key);
+        },
+
+        toggleTheme() {
+          this.currentTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+          localStorage.setItem('factory_theme', this.currentTheme);
+          this.applyTheme();
+        },
+
+        applyTheme() {
+          if (this.currentTheme === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.documentElement.classList.remove('light');
+          } else {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.classList.add('light');
+          }
+          this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
+
+        toggleLanguage() {
+          this.currentLang = this.currentLang === 'fa' ? 'en' : 'fa';
+          localStorage.setItem('factory_lang', this.currentLang);
+          this.applyLanguage();
+        },
+
+        applyLanguage() {
+          document.documentElement.lang = this.currentLang;
+          document.documentElement.dir = this.currentLang === 'fa' ? 'rtl' : 'ltr';
+          this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
+
         async initApp() {
+          this.applyTheme();
+          this.applyLanguage();
+
           await this.fetchStatus();
           await this.fetchAccounts();
           await this.fetchEngineConfig();
@@ -1082,7 +1403,6 @@
           }
           this.$nextTick(() => lucide.createIcons());
 
-          // Poll pipeline every 15s when pipeline tab is active
           setInterval(() => {
             if (this.activeTab === 'pipeline' && this.selectedRepo) {
               this.fetchPipeline(this.selectedRepo, true);
@@ -1135,7 +1455,7 @@
 
         async addAccount() {
           if (!this.newAccountForm.token || !this.newAccountForm.token.trim()) {
-            this.showToast('لطفاً توکن گیت‌هاب را وارد کنید', 'error', 'alert-circle');
+            this.showToast(this.currentLang === 'fa' ? 'لطفاً توکن گیت‌هاب را وارد کنید' : 'Please enter GitHub PAT', 'error', 'alert-circle');
             return;
           }
           this.isAddingAccount = true;
@@ -1146,54 +1466,32 @@
               body: JSON.stringify(this.newAccountForm)
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'افزودن اکانت ناموفق بود');
+            if (!res.ok) throw new Error(data.detail || 'Failed to add account');
 
-            this.showToast(`اکانت @${data.login} با موفقیت افزوده شد!`, 'success', 'check-circle');
-            this.newAccountForm = { token: '', label: '', set_active: true };
+            this.showToast(this.currentLang === 'fa' ? `اکانت @${data.login} با موفقیت افزوده شد` : `Account @${data.login} added successfully`, 'success', 'check-circle');
+            this.newAccountForm.token = '';
+            this.newAccountForm.label = '';
             await this.fetchAccounts();
             await this.fetchStatus();
-            await this.fetchProjects();
-          } catch (err) {
-            this.showToast(err.message, 'error', 'alert-triangle');
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
           } finally {
             this.isAddingAccount = false;
-            this.$nextTick(() => lucide.createIcons());
           }
         },
 
         async activateAccount(login) {
           try {
             const res = await fetch(`/api/accounts/${login}/activate`, { method: 'POST' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'فعال‌سازی اکانت ناموفق بود');
-
-            this.showToast(`اکانت فعال به @${login} تغییر یافت`, 'success', 'check');
-            await this.fetchAccounts();
-            this.launchForm.account_login = login;
-            await this.fetchStatus();
-            await this.fetchProjects();
-          } catch (err) {
-            this.showToast(err.message, 'error', 'alert-triangle');
-          } finally {
-            this.$nextTick(() => lucide.createIcons());
-          }
-        },
-
-        async deleteAccount(login) {
-          if (!confirm(`آیا از حذف اکانت @${login} اطمینان دارید؟`)) return;
-          try {
-            const res = await fetch(`/api/accounts/${login}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'حذف اکانت ناموفق بود');
-
-            this.showToast(`اکانت @${login} حذف شد`, 'info', 'trash-2');
+            if (!res.ok) throw new Error('Activation failed');
+            this.showToast(this.currentLang === 'fa' ? `اکانت @${login} فعال شد` : `Account @${login} set as active`, 'success', 'check');
             await this.fetchAccounts();
             await this.fetchStatus();
-            await this.fetchProjects();
-          } catch (err) {
-            this.showToast(err.message, 'error', 'alert-triangle');
-          } finally {
-            this.$nextTick(() => lucide.createIcons());
+            if (this.selectedRepo) {
+              await this.fetchPipeline(this.selectedRepo);
+            }
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
           }
         },
 
@@ -1202,14 +1500,96 @@
           try {
             const res = await fetch(`/api/accounts/${login}/test`, { method: 'POST' });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'تست اتصال ناموفق بود');
-
-            this.showToast(`اتصال به @${data.login} با موفقیت برقرار شد (${data.public_repos} مخزن)`, 'success', 'check-circle');
-          } catch (err) {
-            this.showToast(err.message, 'error', 'alert-triangle');
+            if (data.valid) {
+              this.showToast(this.currentLang === 'fa' ? `توکن معتبر است (@${data.login})` : `Token is valid (@${data.login})`, 'success', 'check-circle');
+            } else {
+              this.showToast(this.currentLang === 'fa' ? `توکن نامعتبر است: ${data.error}` : `Invalid token: ${data.error}`, 'error', 'alert-circle');
+            }
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
           } finally {
             this.testingAccountLogin = null;
+          }
+        },
+
+        async deleteAccount(login) {
+          if (!confirm(this.currentLang === 'fa' ? `آیا از حذف اکانت @${login} مطمئن هستید؟` : `Are you sure you want to delete @${login}?`)) return;
+          try {
+            const res = await fetch(`/api/accounts/${login}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Deletion failed');
+            this.showToast(this.currentLang === 'fa' ? `اکانت @${login} حذف شد` : `Account @${login} deleted`, 'info', 'trash-2');
+            await this.fetchAccounts();
+            await this.fetchStatus();
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          }
+        },
+
+        openEngineModal() {
+          this.showEngineModal = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        async fetchEngineConfig() {
+          try {
+            const res = await fetch('/api/openhands/config');
+            this.engineConfig = await res.json();
+            this.engineForm.mode = this.engineConfig.mode || 'local';
+            this.engineForm.local_base_url = this.engineConfig.local?.base_url || 'http://127.0.0.1:8000';
+            this.engineForm.local_api_key = this.engineConfig.local?.api_key || '';
+            this.engineForm.cloud_base_url = this.engineConfig.cloud?.base_url || 'https://app.all-hands.dev';
+            this.engineForm.cloud_api_key = this.engineConfig.cloud?.api_key || '';
+          } catch (e) {
+            console.error('Engine config fetch failed', e);
+          } finally {
             this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async saveEngineConfig() {
+          try {
+            const payload = {
+              mode: this.engineForm.mode,
+              local: {
+                base_url: this.engineForm.local_base_url,
+                api_key: this.engineForm.local_api_key
+              },
+              cloud: {
+                base_url: this.engineForm.cloud_base_url,
+                api_key: this.engineForm.cloud_api_key
+              }
+            };
+            const res = await fetch('/api/openhands/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('Saving engine config failed');
+            this.engineConfig = await res.json();
+            this.showToast(this.currentLang === 'fa' ? 'تنظیمات موتور با موفقیت ذخیره شد' : 'Engine settings saved successfully', 'success', 'check-circle');
+            this.showEngineModal = false;
+            await this.fetchStatus();
+            await this.fetchConversationsList();
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          }
+        },
+
+        async testEngineConnection() {
+          this.isTestingEngine = true;
+          try {
+            const targetUrl = this.engineForm.mode === 'cloud' ? this.engineForm.cloud_base_url : this.engineForm.local_base_url;
+            const res = await fetch('/api/openhands/conversations?limit=1');
+            const data = await res.json();
+            if (data.status === 'error') {
+              this.showToast(this.currentLang === 'fa' ? `اتصال ناموفق بود: ${data.message}` : `Connection failed: ${data.message}`, 'error', 'alert-circle');
+            } else {
+              this.showToast(this.currentLang === 'fa' ? `اتصال موفق به ${targetUrl}` : `Successfully connected to ${targetUrl}`, 'success', 'check-circle');
+            }
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          } finally {
+            this.isTestingEngine = false;
           }
         },
 
@@ -1222,6 +1602,12 @@
           }
         },
 
+        applyTemplate(tmpl) {
+          this.launchForm.repo_name = tmpl.id;
+          this.launchForm.spec_text = tmpl.spec;
+          this.showToast(this.currentLang === 'fa' ? `قالب "${tmpl.title}" بارگذاری شد` : `Template "${tmpl.title}" applied`, 'info', 'check');
+        },
+
         async fetchProjects() {
           try {
             const res = await fetch('/api/projects');
@@ -1231,89 +1617,79 @@
           }
         },
 
-        applyTemplate(tmpl) {
-          this.launchForm.spec_text = tmpl.spec;
-          if (!this.launchForm.repo_name) {
-            this.launchForm.repo_name = tmpl.id + '-app';
-          }
-          this.showToast(`قالب ${tmpl.title} اعمال شد.`, 'info', 'file-text');
-        },
-
-        async launchProject() {
-          this.isLaunching = true;
-          try {
-            const res = await fetch('/api/projects/launch', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(this.launchForm)
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'خطا در پرتاب پروژه');
-
-            this.showToast(`پروژه ${data.repo} با موفقیت روی خط تولید راه‌اندازی شد!`, 'success', 'check-circle');
-            await this.fetchProjects();
-            this.selectedRepo = data.repo;
-            this.activeTab = 'pipeline';
-            await this.fetchPipeline(this.selectedRepo);
-          } catch (err) {
-            this.showToast(err.message, 'error', 'alert-triangle');
-          } finally {
-            this.isLaunching = false;
-            this.$nextTick(() => lucide.createIcons());
-          }
-        },
-
-        async fetchPipeline(repo, silent = false) {
-          if (!repo) return;
-          if (!silent) this.isPipelineLoading = true;
-          try {
-            const parts = repo.split('/');
-            const res = await fetch(`/api/projects/${parts[0]}/${parts[1]}/pipeline`);
-            if (res.ok) {
-              this.pipelineData = await res.json();
-            }
-          } catch (e) {
-            console.error('Pipeline fetch failed', e);
-          } finally {
-            this.isPipelineLoading = false;
-            this.$nextTick(() => lucide.createIcons());
-          }
-        },
-
         selectProject(repo) {
           this.selectedRepo = repo;
           this.activeTab = 'pipeline';
           this.fetchPipeline(repo);
         },
 
-        async triggerOrchestrate() {
-          if (!this.selectedRepo) return;
-          this.isActionLoading = true;
+        async fetchPipeline(repo, silent = false) {
+          if (!silent) this.isPipelineLoading = true;
           try {
-            const [owner, repo] = this.selectedRepo.split('/');
-            const res = await fetch(`/api/projects/${owner}/${repo}/orchestrate`, { method: 'POST' });
+            const res = await fetch(`/api/pipeline/${repo}`);
+            if (res.ok) {
+              this.pipelineData = await res.json();
+            }
+          } catch (e) {
+            if (!silent) this.showToast(e.message, 'error');
+          } finally {
+            if (!silent) this.isPipelineLoading = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        refreshCurrentPipeline() {
+          if (this.selectedRepo) {
+            this.fetchPipeline(this.selectedRepo);
+          }
+        },
+
+        async launchProject() {
+          this.isLaunching = true;
+          try {
+            const res = await fetch('/api/launch', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.launchForm)
+            });
             const data = await res.json();
-            this.showToast(`بررسی فازها انجام شد. (${data.result?.transitions_count || 0} فاز جدید باز شد)`, 'success', 'play');
+            if (!res.ok) throw new Error(data.detail || 'Launch failed');
+
+            this.showToast(this.currentLang === 'fa' ? `پروژه ${data.repo} با موفقیت راه‌اندازی شد!` : `Project ${data.repo} launched successfully!`, 'success', 'rocket');
+            await this.fetchProjects();
+            this.selectedRepo = data.repo;
+            this.activeTab = 'pipeline';
             await this.fetchPipeline(this.selectedRepo);
           } catch (e) {
-            this.showToast('خطا در ارکستراسیون', 'error', 'alert-triangle');
+            this.showToast(e.message, 'error', 'alert-triangle');
+          } finally {
+            this.isLaunching = false;
+          }
+        },
+
+        async triggerOrchestrate() {
+          this.isActionLoading = true;
+          try {
+            const res = await fetch(`/api/pipeline/${this.selectedRepo}/orchestrate`, { method: 'POST' });
+            const data = await res.json();
+            this.showToast(this.currentLang === 'fa' ? `ارکستریتور اجرا شد: ${data.message || 'عملیات با موفقیت انجام شد'}` : `Orchestrator triggered: ${data.message || 'Success'}`, 'info', 'play');
+            await this.fetchPipeline(this.selectedRepo);
+          } catch (e) {
+            this.showToast(e.message, 'error');
           } finally {
             this.isActionLoading = false;
           }
         },
 
         async triggerHealer() {
-          if (!this.selectedRepo) return;
           this.isActionLoading = true;
           try {
-            const [owner, repo] = this.selectedRepo.split('/');
-            const res = await fetch(`/api/projects/${owner}/${repo}/heal`, { method: 'POST' });
+            const res = await fetch(`/api/pipeline/${this.selectedRepo}/heal`, { method: 'POST' });
             const data = await res.json();
-            const healed = data.result?.healed || 0;
-            this.showToast(`اسکن سلامت PRها تکمیل شد. (${healed} پول‌ریکوئست ترمیم شد)`, 'info', 'shield-check');
+            this.showToast(this.currentLang === 'fa' ? `سیستم ترمیم اجرا شد: ${data.message || 'بررسی وضعیت انجام شد'}` : `Healer executed: ${data.message || 'Health check complete'}`, 'info', 'shield-check');
             await this.fetchPipeline(this.selectedRepo);
           } catch (e) {
-            this.showToast('خطا در اسکن هیلر', 'error', 'alert-triangle');
+            this.showToast(e.message, 'error');
           } finally {
             this.isActionLoading = false;
           }
@@ -1321,7 +1697,7 @@
 
         async trackRepo() {
           if (!this.trackRepoInput || !this.trackRepoInput.includes('/')) {
-            this.showToast('نام مخزن باید به فرمت owner/repo باشد', 'error', 'alert-circle');
+            this.showToast(this.currentLang === 'fa' ? 'لطفاً نام مخزن را در قالب owner/repo وارد کنید' : 'Please enter owner/repo format', 'error');
             return;
           }
           try {
@@ -1330,95 +1706,35 @@
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ repo: this.trackRepoInput.trim() })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'افزودن مخزن ناموفق بود');
-            this.showToast(`مخزن ${this.trackRepoInput} اضافه شد`, 'success', 'check-circle');
+            if (!res.ok) throw new Error('Tracking failed');
+            this.showToast(this.currentLang === 'fa' ? 'مخزن با موفقیت اضافه شد' : 'Repository tracked', 'success');
             this.showTrackModal = false;
+            this.selectedRepo = this.trackRepoInput.trim();
             this.trackRepoInput = '';
+            await this.fetchProjects();
+            this.activeTab = 'pipeline';
+            await this.fetchPipeline(this.selectedRepo);
           } catch (e) {
-            this.showToast(e.message, 'error', 'alert-triangle');
+            this.showToast(e.message, 'error');
           }
         },
 
-        async fetchEngineConfig() {
-          try {
-            const res = await fetch('/api/openhands/config');
-            if (res.ok) {
-              this.engineConfig = await res.json();
-              this.engineForm.mode = this.engineConfig.mode || 'local';
-              this.engineForm.local_base_url = this.engineConfig.local?.base_url || 'http://127.0.0.1:8000';
-              this.engineForm.cloud_base_url = this.engineConfig.cloud?.base_url || 'https://app.all-hands.dev';
-            }
-          } catch (e) {
-            console.error('Failed to fetch engine config', e);
-          }
-        },
-
-        openEngineModal() {
-          this.fetchEngineConfig();
-          this.showEngineModal = true;
-          this.$nextTick(() => lucide.createIcons());
-        },
-
-        async saveEngineConfig() {
-          try {
-            const payload = {
-              mode: this.engineForm.mode,
-              local_base_url: this.engineForm.local_base_url,
-              local_api_key: this.engineForm.local_api_key || null,
-              cloud_base_url: this.engineForm.cloud_base_url,
-              cloud_api_key: this.engineForm.cloud_api_key || null,
-            };
-            const res = await fetch('/api/openhands/config', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-            if (!res.ok) throw new Error('خطا در ذخیره تنظیمات');
-            this.engineConfig = await res.json();
-            this.showToast('تنظیمات موتور OpenHands با موفقیت ذخیره شد', 'success', 'check-circle');
-            this.showEngineModal = false;
-            await this.fetchStatus();
-            await this.fetchConversationsList();
-          } catch (e) {
-            this.showToast(e.message, 'error', 'alert-triangle');
-          }
-        },
-
-        async testEngineConnection() {
-          this.isTestingEngine = true;
-          try {
-            await this.fetchStatus();
-            if (this.systemStatus.openhands?.connected) {
-              this.showToast(`اتصال موتور برقرار است! نسخه: ${this.systemStatus.openhands.version || 'Active'}`, 'success', 'check-circle');
-            } else {
-              this.showToast(`عدم برقراری اتصال به موتور: ${this.systemStatus.openhands?.error || 'آفلاین'}`, 'error', 'alert-circle');
-            }
-          } catch (e) {
-            this.showToast('خطا در تست اتصال', 'error', 'alert-triangle');
-          } finally {
-            this.isTestingEngine = false;
-          }
-        },
-
-        async openConsoleDrawer(conversationId = null) {
+        // -------------------------------------------------------------
+        // LIVE AGENT CONSOLE & CHAT
+        // -------------------------------------------------------------
+        async openConsoleDrawer(convId = null) {
           this.showConsoleDrawer = true;
           await this.fetchConversationsList();
-          if (conversationId) {
-            this.activeConversationId = conversationId;
+          if (convId) {
+            this.activeConversationId = convId;
           } else if (!this.activeConversationId && this.openhandsConversations.length > 0) {
             this.activeConversationId = this.openhandsConversations[0].id;
           }
           if (this.activeConversationId) {
-            await this.fetchEvents(this.activeConversationId);
+            await this.selectConversation(this.activeConversationId);
           }
-          this.$nextTick(() => {
-            lucide.createIcons();
-            const container = document.getElementById('consoleEventsContainer');
-            if (container) container.scrollTop = container.scrollHeight;
-          });
+          this.$nextTick(() => lucide.createIcons());
 
-          // Start polling every 4 seconds
           if (this.consolePollTimer) clearInterval(this.consolePollTimer);
           this.consolePollTimer = setInterval(() => {
             if (this.showConsoleDrawer && this.activeConversationId) {
@@ -1437,48 +1753,44 @@
 
         async fetchConversationsList() {
           try {
-            const res = await fetch('/api/openhands/conversations');
-            if (res.ok) {
-              const data = await res.json();
-              this.openhandsConversations = data.conversations || [];
-            }
+            const res = await fetch('/api/openhands/conversations?limit=25');
+            const data = await res.json();
+            this.openhandsConversations = data.conversations || [];
           } catch (e) {
             console.error('Failed to fetch OpenHands conversations', e);
           }
         },
 
         async selectConversation(id) {
-          if (!id) return;
           this.activeConversationId = id;
+          this.activeConversation = this.openhandsConversations.find(c => c.id === id) || null;
+          this.conversationEvents = [];
           await this.fetchEvents(id);
         },
 
-        async fetchEvents(id, background = false) {
-          if (!id) return;
-          if (!background) this.isEventsLoading = true;
+        async fetchEvents(convId, silent = false) {
+          if (!convId) return;
+          if (!silent) this.isEventsLoading = true;
           try {
-            const res = await fetch(`/api/openhands/conversations/${id}/events`);
+            const res = await fetch(`/api/openhands/conversations/${convId}/events?limit=100`);
+            const data = await res.json();
             if (res.ok) {
-              const data = await res.json();
               this.conversationEvents = data.events || [];
-              const matched = this.openhandsConversations.find(c => c.id === id);
-              this.activeConversation = {
-                id,
-                title: matched ? matched.title : 'گفتگو',
-                status: data.status || 'unknown'
-              };
-              if (!background) {
-                this.$nextTick(() => {
-                  const container = document.getElementById('consoleEventsContainer');
-                  if (container) container.scrollTop = container.scrollHeight;
-                });
+              if (data.status) {
+                if (this.activeConversation) this.activeConversation.status = data.status;
               }
+              this.$nextTick(() => {
+                const container = document.getElementById('consoleEventsContainer');
+                if (container && !silent) {
+                  container.scrollTop = container.scrollHeight;
+                }
+                lucide.createIcons();
+              });
             }
           } catch (e) {
-            console.error('Failed to fetch events', e);
+            console.error('Fetch events failed', e);
           } finally {
-            if (!background) this.isEventsLoading = false;
-            this.$nextTick(() => lucide.createIcons());
+            if (!silent) this.isEventsLoading = false;
           }
         },
 
@@ -1486,16 +1798,16 @@
           if (!this.chatInput.trim() || !this.activeConversationId) return;
           this.isSendingChat = true;
           const msg = this.chatInput.trim();
+          this.chatInput = '';
           try {
             const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: msg, run: true })
+              body: JSON.stringify({ message: msg })
             });
             const data = await res.json();
-            if (!res.ok) throw new Error(data.detail || 'ارسال پیام ناموفق بود');
-            this.showToast('پیام شما به ایجنت ارسال شد و اجرا ادامه یافت', 'success', 'send');
-            this.chatInput = '';
+            if (!res.ok) throw new Error(data.detail || 'Failed to send message');
+            this.showToast(this.currentLang === 'fa' ? 'پیام به ایجنت ارسال شد' : 'Message sent to agent', 'success', 'send');
             await this.fetchEvents(this.activeConversationId);
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
@@ -1516,8 +1828,8 @@
             const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/interrupt`, {
               method: 'POST'
             });
-            if (!res.ok) throw new Error('توقف ناموفق بود');
-            this.showToast('دستور توقف اضطراری ارسال شد. حلقه ایجنت متوقف گردید.', 'info', 'octagon-alert');
+            if (!res.ok) throw new Error('Interrupt failed');
+            this.showToast(this.currentLang === 'fa' ? 'دستور توقف اضطراری ارسال شد' : 'Emergency interrupt sent', 'info', 'octagon-alert');
             await this.fetchEvents(this.activeConversationId);
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
@@ -1532,8 +1844,8 @@
             const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/run`, {
               method: 'POST'
             });
-            if (!res.ok) throw new Error('اجرای مجدد ناموفق بود');
-            this.showToast('حلقه اجرای ایجنت فعال شد', 'success', 'play');
+            if (!res.ok) throw new Error('Resume failed');
+            this.showToast(this.currentLang === 'fa' ? 'حلقه اجرای ایجنت فعال شد' : 'Agent execution resumed', 'success', 'play');
             await this.fetchEvents(this.activeConversationId);
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
@@ -1562,7 +1874,18 @@
         },
 
         translateStatus(status) {
-          const map = {
+          if (this.currentLang === 'en') {
+            const mapEn = {
+              'COMPLETED': 'Completed & Merged',
+              'IN_PROGRESS': 'In Progress',
+              'HEALING': 'Auto-Healing',
+              'ESCALATED': 'Needs Human Review',
+              'BLOCKED': 'Blocked',
+              'QUEUED': 'Queued'
+            };
+            return mapEn[status] || status;
+          }
+          const mapFa = {
             'COMPLETED': 'تکمیل و مرج‌شده',
             'IN_PROGRESS': 'در حال کدنویسی',
             'HEALING': 'در حال ترمیم خودکار',
@@ -1570,7 +1893,7 @@
             'BLOCKED': 'قفل (منتظر فاز قبل)',
             'QUEUED': 'در صف اجرا'
           };
-          return map[status] || status;
+          return mapFa[status] || status;
         }
       }
     }

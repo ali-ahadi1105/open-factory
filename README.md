@@ -1,10 +1,17 @@
 # Open Factory (Autonomous Software Factory v2)
 
-An autonomous Software Factory powered by [OpenHands](https://github.com/All-Hands-AI/OpenHands) and GitHub.
+[![OpenHands](https://img.shields.io/badge/OpenHands-Agent%20SDK-6366f1.svg)](https://github.com/All-Hands-AI/OpenHands)
+[![License: MIT](https://img.shields.io/badge/License-MIT-emerald.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Status](https://img.shields.io/badge/Status-Production%20Ready-green.svg)]()
 
-Open Factory delivers **autonomous requirements decomposition (DAG)**, **event-driven phase orchestration**, **automated PR healing (CI / review feedback loop)**, and a **developer-friendly Live Agent Console & Interactive Dashboard**.
+> **An autonomous, end-to-end AI Software Factory powered by OpenHands and GitHub.**  
+> Describe your feature or project spec once—Open Factory breaks it down into a dependency graph (DAG), creates GitHub issues, autonomously writes code and tests, auto-heals CI & review feedback, and drives delivery across phases to completion!
+
+[🇬🇧 English Guide](./README.md) | [🇮🇷 راهنمای فارسی](./README.fa.md)
 
 ---
+
 
 ## ⚡ Quick Start (Zero-Config)
 
