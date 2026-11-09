@@ -69,16 +69,34 @@ class TestOpenHandsIntegration(unittest.TestCase):
         self.assertTrue(parsed["is_error"])
 
     def test_parse_openhands_event_message(self):
-        ev = {
+        # Format 1: direct content
+        ev1 = {
             "id": "e-4",
             "kind": "MessageEvent",
             "role": "user",
             "content": [{"type": "text", "text": "Skip test suite and run without coverage"}],
         }
-        parsed = parse_openhands_event(ev)
-        self.assertIsNotNone(parsed)
-        self.assertEqual(parsed["type"], "user_message")
-        self.assertIn("Skip test suite", parsed["content"])
+        parsed1 = parse_openhands_event(ev1)
+        self.assertIsNotNone(parsed1)
+        self.assertEqual(parsed1["type"], "user_message")
+        self.assertIn("Skip test suite", parsed1["content"])
+
+        # Format 2: llm_message format as sent by OpenHands Agent Server
+        ev2 = {
+            "id": "e-5",
+            "kind": "MessageEvent",
+            "source": "agent",
+            "llm_message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "تست‌ها با موفقیت پاس شدند"}],
+                "reasoning_content": "User asked for status"
+            }
+        }
+        parsed2 = parse_openhands_event(ev2)
+        self.assertIsNotNone(parsed2)
+        self.assertEqual(parsed2["type"], "agent_message")
+        self.assertEqual(parsed2["content"], "تست‌ها با موفقیت پاس شدند")
+        self.assertEqual(parsed2["thought"], "User asked for status")
 
     def test_get_and_update_openhands_config(self):
         cfg = get_openhands_config()

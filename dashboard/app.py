@@ -294,9 +294,14 @@ def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
     eid = raw_ev.get("id") or str(uuid.uuid4())
     ts = raw_ev.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     source = raw_ev.get("source", "unknown")
+    llm_msg = raw_ev.get("llm_message") or {}
 
     # 1. Thought / Reasoning
-    thought_raw = raw_ev.get("thought") or raw_ev.get("reasoning_content")
+    thought_raw = (
+        raw_ev.get("thought")
+        or raw_ev.get("reasoning_content")
+        or llm_msg.get("reasoning_content")
+    )
     thought_text = extract_text_content(thought_raw).strip()
 
     # 2. Action Event
@@ -362,8 +367,9 @@ def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
 
     # 4. Message Event (User or Agent chat message)
     if kind == "MessageEvent":
-        role = raw_ev.get("role", "user")
-        content_text = extract_text_content(raw_ev.get("content", ""))
+        role = llm_msg.get("role") or raw_ev.get("role") or raw_ev.get("source", "user")
+        raw_content = llm_msg.get("content") or raw_ev.get("content") or ""
+        content_text = extract_text_content(raw_content).strip()
         return {
             "id": eid,
             "timestamp": ts,
@@ -1100,14 +1106,15 @@ def get_openhands_conversation(conversation_id: str):
 
 
 @app.get("/api/openhands/conversations/{conversation_id}/events")
-def get_openhands_events(conversation_id: str, limit: int = 50):
-    # Fetch events in chronological order (TIMESTAMP)
+def get_openhands_events(conversation_id: str, limit: int = 100):
+    # Fetch latest events in descending order, then reverse to display chronologically
     res = openhands_request(
         "GET",
         f"/api/conversations/{conversation_id}/events/search",
-        params={"limit": limit, "sort_order": "TIMESTAMP"}
+        params={"limit": limit, "sort_order": "TIMESTAMP_DESC"}
     )
     raw_items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+    raw_items.reverse()
 
     parsed_events = []
     for item in raw_items:
