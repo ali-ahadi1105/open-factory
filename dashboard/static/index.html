@@ -95,7 +95,20 @@
              'bg-rose-950/90 text-rose-200 border-rose-700': toast.type === 'error',
              'bg-indigo-950/90 text-indigo-200 border-indigo-700': toast.type === 'info'
            }">
-        <i :data-lucide="toast.icon || 'info'" class="w-5 h-5 shrink-0"></i>
+        <svg x-show="toast.type === 'success'" class="w-5 h-5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <svg x-show="toast.type === 'error'" class="w-5 h-5 shrink-0 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+        <svg x-show="toast.type !== 'success' && toast.type !== 'error'" class="w-5 h-5 shrink-0 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
         <div class="flex-1" x-text="toast.message"></div>
       </div>
     </template>
@@ -146,12 +159,11 @@
         <!-- GitHub Account Button -->
         <button type="button" @click="openAccountsModal()" 
                 class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-dark-800 hover:bg-slate-50 dark:hover:bg-dark-700 border border-slate-200 dark:border-white/10 hover:border-brand-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
-          <template x-if="activeAccount && activeAccount.avatar_url">
-            <img :src="activeAccount.avatar_url" class="w-4 h-4 rounded-full ring-1 ring-slate-200 dark:ring-white/20">
-          </template>
-          <template x-if="!activeAccount || !activeAccount.avatar_url">
-            <i data-lucide="github" class="w-4 h-4 text-slate-600 dark:text-slate-300"></i>
-          </template>
+          <img x-show="activeAccount && activeAccount.avatar_url" :src="activeAccount?.avatar_url || ''" class="w-4 h-4 rounded-full ring-1 ring-slate-200 dark:ring-white/20">
+          <svg x-show="!activeAccount || !activeAccount.avatar_url" class="w-4 h-4 text-slate-600 dark:text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"></path>
+            <path d="M9 18c-4.51 2-5-2-7-2"></path>
+          </svg>
           <div class="flex items-center gap-1.5">
             <span class="w-2 h-2 rounded-full" :class="systemStatus.github?.connected ? 'bg-emerald-500 shadow-sm shadow-emerald-400' : 'bg-rose-500'"></span>
             <span class="font-medium text-slate-700 dark:text-slate-200" x-text="activeAccount ? '@' + activeAccount.login : (systemStatus.github?.user?.login ? '@' + systemStatus.github.user.login : t('connect_github'))"></span>
@@ -247,9 +259,10 @@
                   <div class="font-bold truncate text-slate-900 dark:text-white" x-text="'@' + acc.login"></div>
                   <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate" x-text="acc.label || acc.name"></div>
                 </div>
-                <template x-if="launchForm.account_login === acc.login">
-                  <i data-lucide="check-circle" class="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0"></i>
-                </template>
+                <svg x-show="launchForm.account_login === acc.login" class="w-4 h-4 text-brand-600 dark:text-brand-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
               </div>
             </template>
           </div>
@@ -322,18 +335,14 @@
         <!-- Submit Button -->
         <button @click="launchProject()" :disabled="isLaunching || !launchForm.repo_name || !launchForm.spec_text"
                 class="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-500 hover:to-indigo-400 text-white font-bold text-sm shadow-xl shadow-indigo-600/25 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300">
-          <template x-if="!isLaunching">
-            <div class="flex items-center gap-2">
-              <i data-lucide="rocket" class="w-5 h-5"></i>
-              <span x-text="t('launch_btn')"></span>
-            </div>
-          </template>
-          <template x-if="isLaunching">
-            <div class="flex items-center gap-2">
-              <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              <span x-text="t('launching_btn')"></span>
-            </div>
-          </template>
+          <svg x-show="!isLaunching" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path>
+            <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path>
+            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path>
+            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
+          </svg>
+          <div x-show="isLaunching" class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <span x-text="isLaunching ? t('launching_btn') : t('launch_btn')"></span>
         </button>
 
       </div>
@@ -502,7 +511,12 @@
               <template x-if="phase.pr">
                 <div class="flex items-center justify-between bg-slate-50 dark:bg-dark-800/60 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/5">
                   <a :href="phase.pr.html_url" target="_blank" class="flex items-center gap-1 font-mono font-semibold text-indigo-600 dark:text-indigo-300 hover:underline">
-                    <i data-lucide="git-pull-request" class="w-3.5 h-3.5"></i>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                      <circle cx="18" cy="18" r="3"></circle>
+                      <circle cx="6" cy="6" r="3"></circle>
+                      <path d="M13 6h3a2 2 0 0 1 2 2v7"></path>
+                      <line x1="6" y1="9" x2="6" y2="21"></line>
+                    </svg>
                     <span x-text="'PR #' + phase.pr.number"></span>
                   </a>
                   <span class="text-[10px] uppercase font-bold"
@@ -514,7 +528,10 @@
               <!-- Blockers info -->
               <template x-if="phase.blockers && phase.blockers.length > 0 && !phase.is_closed">
                 <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <i data-lucide="lock" class="w-3 h-3 text-amber-500"></i>
+                  <svg class="w-3 h-3 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
                   <span><span x-text="t('phase_blocked_by')"></span> <span class="font-mono text-amber-600 dark:text-amber-300" x-text="phase.blockers.map(b => '#' + b).join(', ')"></span></span>
                 </div>
               </template>
@@ -522,7 +539,10 @@
               <!-- Completed badge -->
               <template x-if="phase.is_closed">
                 <div class="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
-                  <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M18 6 7 17l-5-5"></path>
+                    <path d="m22 10-7.5 7.5L13 16"></path>
+                  </svg>
                   <span x-text="t('phase_completed_msg')"></span>
                 </div>
               </template>
@@ -531,7 +551,10 @@
               <template x-if="phase.is_active || phase.conversation_id || phase.status === 'IN_PROGRESS' || phase.status === 'HEALING'">
                 <button type="button" @click="openConsoleDrawer(phase.conversation_id)"
                         class="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/10 dark:bg-indigo-600/20 hover:bg-indigo-600 dark:hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-700 dark:text-indigo-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm">
-                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400"></i>
+                  <svg class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <polyline points="4 17 10 11 4 5"></polyline>
+                    <line x1="12" y1="19" x2="20" y2="19"></line>
+                  </svg>
                   <span x-text="t('phase_console_btn')"></span>
                   <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                 </button>
@@ -634,12 +657,10 @@
               <div class="flex items-center gap-2">
                 <button type="button" @click="testAccount(acc.login)" :disabled="testingAccountLogin === acc.login"
                         class="px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-dark-700 hover:bg-slate-200 dark:hover:bg-dark-600 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1 transition">
-                  <template x-if="testingAccountLogin !== acc.login">
-                    <i data-lucide="check" class="w-3.5 h-3.5 text-slate-500"></i>
-                  </template>
-                  <template x-if="testingAccountLogin === acc.login">
-                    <div class="w-3.5 h-3.5 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
-                  </template>
+                  <svg x-show="testingAccountLogin !== acc.login" class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  </svg>
+                  <div x-show="testingAccountLogin === acc.login" class="w-3.5 h-3.5 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
                   <span x-text="t('test_connection_btn')"></span>
                 </button>
 
@@ -682,7 +703,16 @@
                    class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 pl-3 pr-10 font-mono text-xs text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 shadow-sm">
             <button type="button" @click="showTokenInput = !showTokenInput" 
                     class="absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1">
-              <i :data-lucide="showTokenInput ? 'eye-off' : 'eye'" class="w-4 h-4"></i>
+              <svg x-show="!showTokenInput" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <svg x-show="showTokenInput" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
+                <line x1="2" x2="22" y1="2" x2="22"></line>
+              </svg>
             </button>
           </div>
           <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-normal" x-text="t('token_scope_hint')"></p>
@@ -704,18 +734,12 @@
 
         <button type="button" @click="addAccount()" :disabled="isAddingAccount || !newAccountForm.token"
                 class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-500 hover:from-brand-500 hover:to-indigo-400 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition">
-          <template x-if="!isAddingAccount">
-            <div class="flex items-center gap-1.5">
-              <i data-lucide="shield-check" class="w-4 h-4"></i>
-              <span x-text="t('save_account_btn')"></span>
-            </div>
-          </template>
-          <template x-if="isAddingAccount">
-            <div class="flex items-center gap-1.5">
-              <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              <span x-text="t('validating_account')"></span>
-            </div>
-          </template>
+          <svg x-show="!isAddingAccount" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <polyline points="9 12 11 14 15 10"></polyline>
+          </svg>
+          <div x-show="isAddingAccount" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <span x-text="isAddingAccount ? t('validating_account') : t('save_account_btn')"></span>
         </button>
       </div>
 
@@ -800,12 +824,10 @@
       <div class="flex items-center justify-between border-t border-slate-200 dark:border-white/10 pt-4">
         <button type="button" @click="testEngineConnection()" :disabled="isTestingEngine"
                 class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-dark-800 hover:bg-slate-200 dark:hover:bg-dark-700 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-1.5 transition">
-          <template x-if="!isTestingEngine">
-            <i data-lucide="check" class="w-4 h-4 text-emerald-500"></i>
-          </template>
-          <template x-if="isTestingEngine">
-            <div class="w-4 h-4 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
-          </template>
+          <svg x-show="!isTestingEngine" class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <div x-show="isTestingEngine" class="w-4 h-4 border-2 border-slate-400 border-t-brand-600 rounded-full animate-spin"></div>
           <span x-text="t('test_connection_btn')"></span>
         </button>
 
@@ -912,7 +934,10 @@
 
         <template x-if="conversationEvents.length === 0 && !isEventsLoading">
           <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
-            <i data-lucide="inbox" class="w-8 h-8 text-slate-400 dark:text-slate-600"></i>
+            <svg class="w-8 h-8 text-slate-400 dark:text-slate-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+              <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            </svg>
             <span class="text-xs" x-text="t('console_empty')"></span>
           </div>
         </template>
@@ -935,24 +960,38 @@
             <div class="px-3 py-2 flex items-center justify-between bg-slate-50/80 dark:bg-white/[0.02] border-b border-slate-200 dark:border-white/5 text-[11px]">
               <div class="flex items-center gap-2">
                 <!-- Icon by type -->
-                <template x-if="evt.type === 'command'">
-                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"></i>
-                </template>
-                <template x-if="evt.type === 'output'">
-                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0"></i>
-                </template>
-                <template x-if="evt.type === 'error'">
-                  <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0"></i>
-                </template>
-                <template x-if="evt.type === 'thought'">
-                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0"></i>
-                </template>
-                <template x-if="evt.type === 'user_message'">
-                  <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0"></i>
-                </template>
-                <template x-if="evt.type === 'agent_message'">
-                  <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0"></i>
-                </template>
+                <svg x-show="evt.type === 'command'" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <polyline points="4 17 10 11 4 5"></polyline>
+                  <line x1="12" y1="19" x2="20" y2="19"></line>
+                </svg>
+                <svg x-show="evt.type === 'output'" class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <line x1="10" y1="9" x2="8" y2="9"></line>
+                </svg>
+                <svg x-show="evt.type === 'error'" class="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <svg x-show="evt.type === 'thought'" class="w-3.5 h-3.5 text-purple-500 dark:text-purple-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>
+                  <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path>
+                </svg>
+                <svg x-show="evt.type === 'user_message'" class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <svg x-show="evt.type === 'agent_message'" class="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                  <path d="M12 8V4H8"></path>
+                  <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                  <path d="M2 14h2"></path>
+                  <path d="M20 14h2"></path>
+                  <path d="M15 13v2"></path>
+                  <path d="M9 13v2"></path>
+                </svg>
 
                 <span class="font-bold text-slate-800 dark:text-slate-200" x-text="evt.title"></span>
               </div>
@@ -963,7 +1002,10 @@
             <template x-if="evt.thought && evt.type !== 'thought'">
               <div class="px-3 py-2 bg-purple-50/60 dark:bg-purple-950/20 border-b border-purple-200 dark:border-white/5 text-[11px] text-purple-900 dark:text-purple-200/90 leading-relaxed">
                 <div class="flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 text-[10px] mb-1">
-                  <i data-lucide="brain" class="w-3 h-3"></i>
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+                    <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"></path>
+                    <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"></path>
+                  </svg>
                   <span x-text="t('agent_thought_label')"></span>
                 </div>
                 <p class="whitespace-pre-wrap font-sans" x-text="evt.thought"></p>
@@ -1040,18 +1082,12 @@
           
           <button type="button" @click="sendChatMessage()" :disabled="isSendingChat || !chatInput.trim() || !activeConversationId"
                   class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/20 shrink-0">
-            <template x-if="!isSendingChat">
-              <div class="flex items-center gap-1.5">
-                <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                <span x-text="t('console_send_btn')"></span>
-              </div>
-            </template>
-            <template x-if="isSendingChat">
-              <div class="flex items-center gap-1.5">
-                <div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                <span x-text="t('sending_msg')"></span>
-              </div>
-            </template>
+            <svg x-show="!isSendingChat" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <div x-show="isSendingChat" class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <span x-text="isSendingChat ? t('sending_msg') : t('console_send_btn')"></span>
           </button>
         </div>
 
@@ -1415,7 +1451,6 @@
           setTimeout(() => {
             this.toasts = this.toasts.filter(t => t.id !== id);
           }, 4500);
-          this.$nextTick(() => lucide.createIcons());
         },
 
         async fetchStatus() {
