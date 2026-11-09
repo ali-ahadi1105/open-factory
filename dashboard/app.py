@@ -19,6 +19,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +35,7 @@ DASHBOARD_DIR = Path(__file__).resolve().parent
 STATIC_DIR = DASHBOARD_DIR / "static"
 PROJECTS_FILE = DASHBOARD_DIR / "projects.json"
 ACCOUNTS_FILE = DASHBOARD_DIR / "accounts.json"
+OPENHANDS_CONFIG_FILE = DASHBOARD_DIR / "openhands_config.json"
 
 sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -143,7 +145,254 @@ def ensure_project_tracked(repo: str, name: str = "", description: str = ""):
     save_tracked_projects(projects)
 
 
+# --- OpenHands Runtime & Engine Helpers ---
+
+def get_default_local_key() -> str:
+    key_file = Path.home() / ".openhands" / "agent-canvas" / "api-key.txt"
+    if key_file.is_file():
+        try:
+            val = key_file.read_text(encoding="utf-8").strip()
+            if val:
+                return val
+        except Exception:
+            pass
+    return os.environ.get("OPENHANDS_API_KEY") or os.environ.get("LOCAL_BACKEND_API_KEY", "")
+
+
+def load_openhands_config() -> dict[str, Any]:
+    default_cfg = {
+        "mode": "local",
+        "local": {
+            "base_url": "http://127.0.0.1:8000",
+            "api_key": get_default_local_key(),
+        },
+        "cloud": {
+            "base_url": "https://app.all-hands.dev",
+            "api_key": os.environ.get("OPENHANDS_CLOUD_API_KEY", ""),
+        }
+    }
+    if not OPENHANDS_CONFIG_FILE.is_file():
+        save_openhands_config(default_cfg)
+        return default_cfg
+    try:
+        data = json.loads(OPENHANDS_CONFIG_FILE.read_text(encoding="utf-8"))
+        if "mode" not in data or data["mode"] not in ("local", "cloud"):
+            data["mode"] = "local"
+        if "local" not in data:
+            data["local"] = default_cfg["local"]
+        if "cloud" not in data:
+            data["cloud"] = default_cfg["cloud"]
+        if not data["local"].get("api_key"):
+            data["local"]["api_key"] = get_default_local_key()
+        return data
+    except Exception:
+        return default_cfg
+
+
+def save_openhands_config(cfg: dict[str, Any]):
+    OPENHANDS_CONFIG_FILE.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+
+
+def get_openhands_client_config() -> tuple[str, str, str]:
+    """Returns (mode, base_url, api_key)."""
+    cfg = load_openhands_config()
+    mode = cfg.get("mode", "local")
+    if mode == "cloud":
+        target = cfg.get("cloud", {})
+        base_url = (target.get("base_url") or "https://app.all-hands.dev").rstrip("/")
+        api_key = (target.get("api_key") or "").strip()
+    else:
+        target = cfg.get("local", {})
+        base_url = (target.get("base_url") or "http://127.0.0.1:8000").rstrip("/")
+        api_key = (target.get("api_key") or "").strip() or get_default_local_key()
+    return mode, base_url, api_key
+
+
+def openhands_request(
+    method: str,
+    path: str,
+    body: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    timeout: float = 12.0
+) -> Any:
+    mode, base_url, api_key = get_openhands_client_config()
+    url = f"{base_url}{path}"
+    if params:
+        query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
+        if query:
+            url = f"{url}?{query}"
+
+    headers = {
+        "Accept": "application/json",
+    }
+    if api_key:
+        headers["X-Session-API-Key"] = api_key
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    data_bytes = None
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+        data_bytes = json.dumps(body).encode("utf-8")
+
+    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            content = resp.read().decode("utf-8")
+            if not content:
+                return {}
+            return json.loads(content)
+    except urllib.error.HTTPError as err:
+        err_body = err.read().decode("utf-8", errors="replace")
+        try:
+            err_json = json.loads(err_body)
+            detail = err_json.get("detail", err_json.get("message", err_body))
+        except Exception:
+            detail = err_body
+        raise HTTPException(status_code=err.code, detail=f"OpenHands API Error ({err.code}): {detail}")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot connect to OpenHands ({mode} at {base_url}): {exc}")
+
+
+def extract_text_content(content_obj: Any) -> str:
+    if not content_obj:
+        return ""
+    if isinstance(content_obj, str):
+        return content_obj
+    if isinstance(content_obj, list):
+        parts = []
+        for item in content_obj:
+            if isinstance(item, dict):
+                parts.append(item.get("text", str(item)))
+            else:
+                parts.append(str(item))
+        return "\n".join(parts)
+    if isinstance(content_obj, dict):
+        if "text" in content_obj:
+            return str(content_obj["text"])
+        if "content" in content_obj:
+            return extract_text_content(content_obj["content"])
+        return str(content_obj)
+    return str(content_obj)
+
+
+def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
+    kind = raw_ev.get("kind", "")
+    eid = raw_ev.get("id") or str(uuid.uuid4())
+    ts = raw_ev.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    source = raw_ev.get("source", "unknown")
+
+    # 1. Thought / Reasoning
+    thought_raw = raw_ev.get("thought") or raw_ev.get("reasoning_content")
+    thought_text = extract_text_content(thought_raw).strip()
+
+    # 2. Action Event
+    if kind == "ActionEvent":
+        action = raw_ev.get("action") or {}
+        tool_name = raw_ev.get("tool_name", "")
+        action_kind = action.get("kind", "") if isinstance(action, dict) else ""
+        cmd = ""
+        if isinstance(action, dict):
+            cmd = action.get("command", "") or action.get("path", "") or action.get("message", "")
+        summary = raw_ev.get("summary") or ""
+
+        is_term = (action_kind == "TerminalAction" or tool_name == "terminal")
+        is_fin = (action_kind == "FinishAction" or tool_name == "finish")
+        is_edit = (action_kind == "FileEditAction" or tool_name in ("file_editor", "edit"))
+
+        evt_type = "command" if is_term else ("finish" if is_fin else ("edit" if is_edit else "action"))
+        evt_title = "اجرای دستور ترمینال" if is_term else ("تکمیل فاز / وظیفه" if is_fin else (f"ابزار {tool_name}" if tool_name else (summary or "اقدام ایجنت")))
+
+        return {
+            "id": eid,
+            "timestamp": ts,
+            "kind": kind,
+            "type": evt_type,
+            "source": source,
+            "title": evt_title,
+            "thought": thought_text,
+            "content": cmd,
+            "tool_name": tool_name,
+            "summary": summary,
+            "is_error": False,
+        }
+
+    # 3. Observation Event (Terminal stdout, tool return, error)
+    if kind == "ObservationEvent":
+        obs = raw_ev.get("observation") or {}
+        tool_name = raw_ev.get("tool_name", "")
+        is_error = False
+        content_text = ""
+        if isinstance(obs, dict):
+            is_error = bool(obs.get("is_error", False))
+            content_text = extract_text_content(obs.get("content", ""))
+        else:
+            content_text = str(obs)
+
+        return {
+            "id": eid,
+            "timestamp": ts,
+            "kind": kind,
+            "type": "error" if is_error else "output",
+            "source": source,
+            "title": f"خطای اجرای {tool_name or 'دستور'}" if is_error else f"خروجی {tool_name or 'دستور'}",
+            "thought": "",
+            "content": content_text,
+            "tool_name": tool_name,
+            "summary": "",
+            "is_error": is_error,
+        }
+
+    # 4. Message Event (User or Agent chat message)
+    if kind == "MessageEvent":
+        role = raw_ev.get("role", "user")
+        content_text = extract_text_content(raw_ev.get("content", ""))
+        return {
+            "id": eid,
+            "timestamp": ts,
+            "kind": kind,
+            "type": "agent_message" if role == "assistant" else "user_message",
+            "source": role,
+            "title": "پاسخ ایجنت" if role == "assistant" else "پیام کاربر / ناظر سیستم",
+            "thought": thought_text,
+            "content": content_text,
+            "tool_name": "",
+            "summary": "",
+            "is_error": False,
+        }
+
+    # 5. Fallback if thought text is present
+    if thought_text:
+        return {
+            "id": eid,
+            "timestamp": ts,
+            "kind": kind,
+            "type": "thought",
+            "source": source,
+            "title": "تفکر و تحلیل ایجنت (Reasoning)",
+            "thought": thought_text,
+            "content": thought_text,
+            "tool_name": "",
+            "summary": "",
+            "is_error": False,
+        }
+
+    return None
+
+
 # --- Models ---
+
+class OpenHandsConfigUpdate(BaseModel):
+    mode: str = Field(..., description="'local' or 'cloud'")
+    local_base_url: str | None = None
+    local_api_key: str | None = None
+    cloud_base_url: str | None = None
+    cloud_api_key: str | None = None
+
+
+class AgentChatRequest(BaseModel):
+    message: str = Field(..., description="Message/prompt/hint to send to the agent")
+    run: bool = Field(True, description="Whether to resume agent execution if stopped")
+
 
 class AddAccountRequest(BaseModel):
     token: str = Field(..., description="GitHub Personal Access Token (classic ghp_... or fine-grained github_pat_...)")
@@ -314,15 +563,24 @@ def get_system_status():
         status["github"]["error"] = str(exc)
 
     # 2. Test OpenHands
+    mode, base_url, api_key = get_openhands_client_config()
+    status["openhands"]["mode"] = mode
+    status["openhands"]["base_url"] = base_url
+    status["openhands"]["has_key"] = bool(api_key)
     try:
-        req = urllib.request.Request("http://127.0.0.1:8000/server_info", headers={"Accept": "application/json"})
-        with urllib.request.urlopen(req, timeout=1.5) as resp:
+        headers = {"Accept": "application/json"}
+        if api_key:
+            headers["X-Session-API-Key"] = api_key
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(f"{base_url}/server_info", headers=headers)
+        with urllib.request.urlopen(req, timeout=2.5) as resp:
             data = json.loads(resp.read().decode())
             status["openhands"]["connected"] = True
-            status["openhands"]["version"] = data.get("version")
+            status["openhands"]["version"] = data.get("version") or data.get("sdk_version")
             status["openhands"]["title"] = data.get("title")
             status["openhands"]["usable_tools"] = data.get("usable_tools", [])
     except Exception as exc:
+        status["openhands"]["connected"] = False
         status["openhands"]["error"] = str(exc)
 
     return status
@@ -693,6 +951,27 @@ def get_project_pipeline(owner: str, repo: str):
             "pr": pr_by_issue.get(issue_num),
         })
 
+    # Find matching OpenHands conversations if available
+    conv_by_phase: dict[int, str] = {}
+    try:
+        raw_convs = openhands_request("GET", "/api/conversations/search", params={"limit": 25, "sort_order": "CREATED_AT_DESC"}, timeout=2.0)
+        c_items = raw_convs.get("items", []) if isinstance(raw_convs, dict) else (raw_convs if isinstance(raw_convs, list) else [])
+        for c in c_items:
+            title = c.get("title", "")
+            cid = c.get("id")
+            if not cid:
+                continue
+            pm = re.search(r"Phase\s*(\d+)", title, re.IGNORECASE)
+            if pm:
+                p_num = int(pm.group(1))
+                if p_num not in conv_by_phase:
+                    conv_by_phase[p_num] = cid
+    except Exception:
+        pass
+
+    for p in factory_phases:
+        p["conversation_id"] = conv_by_phase.get(p["phase"])
+
     factory_phases.sort(key=lambda x: (x["phase"], x["issue_number"]))
 
     total = len(factory_phases)
@@ -728,6 +1007,166 @@ def run_healer(owner: str, repo: str):
         return {"status": "ok", "result": res}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# --- OpenHands Engine & Interactive Console Endpoints ---
+
+@app.get("/api/openhands/config")
+def get_openhands_config():
+    cfg = load_openhands_config()
+    local_key = cfg.get("local", {}).get("api_key") or get_default_local_key()
+    cloud_key = cfg.get("cloud", {}).get("api_key", "")
+    return {
+        "mode": cfg.get("mode", "local"),
+        "local": {
+            "base_url": cfg.get("local", {}).get("base_url", "http://127.0.0.1:8000"),
+            "has_key": bool(local_key),
+            "masked_key": f"{local_key[:4]}...{local_key[-4:]}" if len(local_key) >= 8 else ("***" if local_key else "")
+        },
+        "cloud": {
+            "base_url": cfg.get("cloud", {}).get("base_url", "https://app.all-hands.dev"),
+            "has_key": bool(cloud_key),
+            "masked_key": f"{cloud_key[:4]}...{cloud_key[-4:]}" if len(cloud_key) >= 8 else ("***" if cloud_key else "")
+        }
+    }
+
+
+@app.post("/api/openhands/config")
+def update_openhands_config(req: OpenHandsConfigUpdate):
+    cfg = load_openhands_config()
+    if req.mode in ("local", "cloud"):
+        cfg["mode"] = req.mode
+    if req.local_base_url:
+        cfg["local"]["base_url"] = req.local_base_url.rstrip("/")
+    if req.local_api_key is not None:
+        cfg["local"]["api_key"] = req.local_api_key.strip()
+    if req.cloud_base_url:
+        cfg["cloud"]["base_url"] = req.cloud_base_url.rstrip("/")
+    if req.cloud_api_key is not None:
+        cfg["cloud"]["api_key"] = req.cloud_api_key.strip()
+    save_openhands_config(cfg)
+    return get_openhands_config()
+
+
+@app.get("/api/openhands/conversations")
+def list_openhands_conversations(limit: int = 25):
+    try:
+        res = openhands_request("GET", "/api/conversations/search", params={"limit": limit, "sort_order": "CREATED_AT_DESC"})
+        items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+        conversations = []
+        for c in items:
+            conversations.append({
+                "id": c.get("id"),
+                "title": c.get("title") or "گفتگوی بدون عنوان",
+                "status": c.get("execution_status") or "unknown",
+                "created_at": c.get("created_at"),
+                "selected_repository": c.get("selected_repository"),
+            })
+        return {"conversations": conversations}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/openhands/conversations/{conversation_id}")
+def get_openhands_conversation(conversation_id: str):
+    res = openhands_request("GET", f"/api/conversations/{conversation_id}")
+    return {
+        "id": res.get("id"),
+        "title": res.get("title"),
+        "status": res.get("execution_status"),
+        "created_at": res.get("created_at"),
+        "selected_repository": res.get("selected_repository"),
+    }
+
+
+@app.get("/api/openhands/conversations/{conversation_id}/events")
+def get_openhands_events(conversation_id: str, limit: int = 50):
+    # Fetch events in chronological order (TIMESTAMP)
+    res = openhands_request(
+        "GET",
+        f"/api/conversations/{conversation_id}/events/search",
+        params={"limit": limit, "sort_order": "TIMESTAMP"}
+    )
+    raw_items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+
+    parsed_events = []
+    for item in raw_items:
+        p = parse_openhands_event(item)
+        if p:
+            parsed_events.append(p)
+
+    status = "unknown"
+    try:
+        conv_info = openhands_request("GET", f"/api/conversations/{conversation_id}")
+        status = conv_info.get("execution_status", "unknown")
+    except Exception:
+        pass
+
+    return {
+        "conversation_id": conversation_id,
+        "status": status,
+        "total_events": len(parsed_events),
+        "events": parsed_events,
+    }
+
+
+@app.post("/api/openhands/conversations/{conversation_id}/chat")
+def send_openhands_chat(conversation_id: str, req: AgentChatRequest):
+    if not req.message.strip():
+        raise HTTPException(status_code=400, detail="پیام نمی‌تواند خالی باشد.")
+
+    payload = {
+        "role": "user",
+        "content": [{"type": "text", "text": req.message}],
+        "run": req.run,
+    }
+    res = openhands_request("POST", f"/api/conversations/{conversation_id}/events", body=payload)
+    return {"status": "sent", "response": res}
+
+
+@app.post("/api/openhands/conversations/{conversation_id}/interrupt")
+def interrupt_openhands_conversation(conversation_id: str):
+    res = openhands_request("POST", f"/api/conversations/{conversation_id}/interrupt", body={})
+    return {"status": "interrupted", "result": res}
+
+
+@app.post("/api/openhands/conversations/{conversation_id}/run")
+def resume_openhands_conversation(conversation_id: str):
+    res = openhands_request("POST", f"/api/conversations/{conversation_id}/run", body={})
+    return {"status": "resumed", "result": res}
+
+
+@app.get("/api/projects/{owner}/{repo}/conversation")
+def get_project_conversation(owner: str, repo: str, phase: int | None = None):
+    try:
+        res = openhands_request("GET", "/api/conversations/search", params={"limit": 30, "sort_order": "CREATED_AT_DESC"})
+        items = res.get("items", []) if isinstance(res, dict) else []
+
+        target_phase_str = f"Phase {phase}" if phase is not None else None
+
+        # 1. Match phase
+        if target_phase_str:
+            for c in items:
+                title = c.get("title", "")
+                if target_phase_str.lower() in title.lower():
+                    return {"found": True, "conversation": c}
+
+        # 2. Match repo name
+        for c in items:
+            title = c.get("title", "")
+            selected_repo = c.get("selected_repository", "")
+            if repo.lower() in title.lower() or (selected_repo and repo.lower() in selected_repo.lower()):
+                return {"found": True, "conversation": c}
+
+        # 3. Return latest if exists
+        if items:
+            return {"found": True, "conversation": items[0]}
+
+        return {"found": False, "conversation": None}
+    except Exception as exc:
+        return {"found": False, "error": str(exc), "conversation": None}
 
 
 if __name__ == "__main__":

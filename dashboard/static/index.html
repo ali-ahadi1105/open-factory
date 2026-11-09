@@ -104,12 +104,24 @@
           <span class="text-[10px] px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 group-hover:bg-brand-500/30">اکانت‌ها</span>
         </button>
 
-        <!-- OpenHands Server Pill -->
-        <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 border border-white/5 text-xs">
+        <!-- OpenHands Engine Configuration Button -->
+        <button type="button" @click="openEngineModal()"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-dark-800 hover:bg-dark-700 border border-white/10 hover:border-indigo-500/50 text-xs transition-all duration-200 group cursor-pointer shadow-sm">
           <span class="w-2.5 h-2.5 rounded-full" :class="systemStatus.openhands?.connected ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-rose-400'"></span>
           <i data-lucide="bot" class="w-4 h-4 text-slate-300"></i>
-          <span x-text="systemStatus.openhands?.connected ? 'OpenHands Engine Active' : 'Agent Server Offline'"></span>
-        </div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-medium text-slate-200" x-text="systemStatus.openhands?.mode === 'cloud' ? 'OpenHands Cloud' : 'OpenHands Local'"></span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 group-hover:bg-indigo-500/30">موتور</span>
+          </div>
+        </button>
+
+        <!-- Live Agent Console Drawer Button -->
+        <button type="button" @click="openConsoleDrawer()"
+                class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-bold transition-all duration-200 shadow-md shadow-indigo-600/20 cursor-pointer">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          <span>کنسول و چت زنده ایجنت</span>
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        </button>
       </div>
 
     </div>
@@ -459,6 +471,16 @@
                   <span>با موفقیت تحویل و مرج شد</span>
                 </div>
               </template>
+
+              <!-- Live Agent Console Button -->
+              <template x-if="phase.is_active || phase.conversation_id || phase.status === 'IN_PROGRESS' || phase.status === 'HEALING'">
+                <button type="button" @click="openConsoleDrawer(phase.conversation_id)"
+                        class="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/40 text-indigo-200 hover:text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-sm">
+                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-400"></i>
+                  <span>کنسول و چت زنده با ایجنت</span>
+                  <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                </button>
+              </template>
             </div>
 
           </div>
@@ -655,6 +677,332 @@
     </div>
   </div>
 
+  <!-- Engine Settings Modal (Local vs OpenHands Cloud) -->
+  <div x-show="showEngineModal" x-cloak class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+    <div class="glass max-w-xl w-full p-6 rounded-2xl flex flex-col gap-5 border border-white/10 my-8 shadow-2xl" @click.outside="showEngineModal = false">
+      
+      <div class="flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
+            <i data-lucide="sliders" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-white">تنظیمات موتور هوش مصنوعی (OpenHands Engine)</h3>
+            <p class="text-xs text-slate-400">جابجایی بین سرور محلی (Local Docker/CLI) و کلاود OpenHands Cloud</p>
+          </div>
+        </div>
+        <button @click="showEngineModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Mode Selector Tabs -->
+      <div class="grid grid-cols-2 gap-3 p-1 rounded-xl bg-dark-800 border border-white/10">
+        <button type="button" @click="engineForm.mode = 'local'"
+                class="py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
+                :class="engineForm.mode === 'local' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+          <i data-lucide="server" class="w-4 h-4"></i>
+          <span>سرور محلی (Local Engine)</span>
+        </button>
+        <button type="button" @click="engineForm.mode = 'cloud'"
+                class="py-2.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
+                :class="engineForm.mode === 'cloud' ? 'bg-brand-600 text-white shadow-md' : 'text-slate-400 hover:text-white'">
+          <i data-lucide="cloud" class="w-4 h-4"></i>
+          <span>کلاود (OpenHands Cloud)</span>
+        </button>
+      </div>
+
+      <!-- Form Content -->
+      <div class="flex flex-col gap-4">
+        <template x-if="engineForm.mode === 'local'">
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 mb-1 block">آدرس سرور محلی (Local Base URL)</label>
+              <input type="text" x-model="engineForm.local_base_url" placeholder="http://127.0.0.1:8000" dir="ltr"
+                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
+              <p class="text-[11px] text-slate-400 mt-1">پورت اینگرس پیش‌فرض OpenHands عدد ۸۰۰۰ یا ۱۸۰۰۰ است.</p>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 mb-1 block">کلید نشست / توکن محلی (اختیاری)</label>
+              <input type="password" x-model="engineForm.local_api_key" placeholder="کلید از پیش خوانده شده از فایل محلی" dir="ltr"
+                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
+              <p class="text-[11px] text-slate-400 mt-1">در صورت خالی ماندن، کلید به صورت خودکار از <code class="text-indigo-300">~/.openhands/agent-canvas/api-key.txt</code> خوانده می‌شود.</p>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="engineForm.mode === 'cloud'">
+          <div class="flex flex-col gap-3">
+            <div>
+              <label class="text-xs font-semibold text-slate-300 mb-1 block">آدرس کلاود (Cloud API URL)</label>
+              <input type="text" x-model="engineForm.cloud_base_url" placeholder="https://app.all-hands.dev" dir="ltr"
+                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-slate-300 mb-1 block">کلید دسترسی OpenHands Cloud API Key</label>
+              <input type="password" x-model="engineForm.cloud_api_key" placeholder="oh_api_pat_..." dir="ltr"
+                     class="w-full bg-dark-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500">
+              <p class="text-[11px] text-slate-400 mt-1">می‌توانید توکن خود را از بخش Settings در <a href="https://app.all-hands.dev" target="_blank" class="text-brand-400 hover:underline">پنل OpenHands Cloud</a> دریافت کنید.</p>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-between border-t border-white/10 pt-4">
+        <button type="button" @click="testEngineConnection()" :disabled="isTestingEngine"
+                class="px-4 py-2 rounded-xl bg-dark-800 hover:bg-dark-700 text-xs text-slate-300 hover:text-white flex items-center gap-1.5 transition">
+          <template x-if="!isTestingEngine">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+          </template>
+          <template x-if="isTestingEngine">
+            <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+          </template>
+          <span>تست اتصال</span>
+        </button>
+
+        <div class="flex items-center gap-2">
+          <button type="button" @click="showEngineModal = false" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">انصراف</button>
+          <button type="button" @click="saveEngineConfig()"
+                  class="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/20 transition">
+            ذخیره تنظیمات
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Live Agent Console & Interactive Chat Drawer -->
+  <div x-show="showConsoleDrawer" x-cloak class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex justify-start">
+    <div class="w-full max-w-4xl bg-dark-900 border-l border-white/10 h-full flex flex-col shadow-2xl transition-all duration-300" @click.outside="closeConsoleDrawer()">
+      
+      <!-- Drawer Top Header -->
+      <div class="p-4 border-b border-white/10 bg-dark-800/80 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-600/20 text-brand-400 flex items-center justify-center border border-brand-500/30">
+            <i data-lucide="terminal" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-sm text-white">کنسول زنده و هدایت تعاملی ایجنت (HITL Console)</h3>
+              <!-- Live status badge -->
+              <template x-if="activeConversation">
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                      :class="{
+                        'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 animate-pulse': activeConversation.status === 'running',
+                        'bg-amber-500/20 text-amber-300 border border-amber-500/30': activeConversation.status === 'paused',
+                        'bg-slate-700/40 text-slate-300 border border-slate-600/30': activeConversation.status === 'finished',
+                        'bg-rose-500/20 text-rose-300 border border-rose-500/30': activeConversation.status === 'error' || activeConversation.status === 'interrupted'
+                      }"
+                      x-text="activeConversation.status || 'running'"></span>
+              </template>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-0.5">مشاهده لاگ‌ها و تفکرات ایجنت، ارسال پرامپت اصلاحی و توقف اضطراری</p>
+          </div>
+        </div>
+
+        <!-- Controls: Interrupt, Run, OpenHands UI, Close -->
+        <div class="flex items-center gap-2">
+          <!-- Emergency Interrupt Button -->
+          <button type="button" @click="interruptAgent()" :disabled="isInterrupting || !activeConversationId"
+                  class="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 border border-rose-500/40 hover:border-rose-500 text-rose-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  title="توقف اضطراری حلقه اجرای ایجنت">
+            <i data-lucide="octagon-alert" class="w-4 h-4 text-rose-400"></i>
+            <span>توقف اضطراری (Interrupt)</span>
+          </button>
+
+          <!-- Resume / Run Button -->
+          <button type="button" @click="resumeAgent()" :disabled="!activeConversationId"
+                  class="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 border border-emerald-500/40 hover:border-emerald-500 text-emerald-300 hover:text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                  title="ادامه اجرای ایجنت">
+            <i data-lucide="play" class="w-4 h-4 text-emerald-400"></i>
+            <span>ادامه اجرا (Run)</span>
+          </button>
+
+          <!-- Refresh button -->
+          <button type="button" @click="fetchEvents(activeConversationId)" 
+                  class="p-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 hover:text-white transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4" :class="isEventsLoading ? 'animate-spin text-brand-400' : ''"></i>
+          </button>
+
+          <!-- Open in Web UI -->
+          <a :href="getOpenHandsWebUrl(activeConversationId)" target="_blank"
+             class="p-2 rounded-xl bg-dark-700 hover:bg-dark-600 text-slate-300 hover:text-white transition"
+             title="باز کردن در رابط وب OpenHands">
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+          </a>
+
+          <!-- Close drawer -->
+          <button type="button" @click="closeConsoleDrawer()" class="p-2 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Conversation Selector Bar -->
+      <div class="px-4 py-2 bg-dark-800/40 border-b border-white/5 flex items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2 flex-1">
+          <span class="text-slate-400 shrink-0 font-medium">گفتگوی فعال:</span>
+          <select x-model="activeConversationId" @change="selectConversation(activeConversationId)"
+                  class="bg-dark-900 border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-brand-500 max-w-md w-full">
+            <template x-for="conv in openhandsConversations" :key="conv.id">
+              <option :value="conv.id" x-text="conv.title + ' (' + conv.status + ')'" :selected="conv.id === activeConversationId"></option>
+            </template>
+          </select>
+        </div>
+        <span class="font-mono text-[10px] text-slate-500" x-text="activeConversationId"></span>
+      </div>
+
+      <!-- Body: Event Log Stream -->
+      <div class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 font-sans" id="consoleEventsContainer">
+        <template x-if="isEventsLoading && conversationEvents.length === 0">
+          <div class="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
+            <div class="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+            <span class="text-xs">در حال بارگذاری جریان رویدادهای ایجنت...</span>
+          </div>
+        </template>
+
+        <template x-if="conversationEvents.length === 0 && !isEventsLoading">
+          <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-500">
+            <i data-lucide="inbox" class="w-8 h-8 text-slate-600"></i>
+            <span class="text-xs">هیچ رویدادی برای این گفتگو ثبت نشده است.</span>
+          </div>
+        </template>
+
+        <!-- Stream items -->
+        <template x-for="evt in conversationEvents" :key="evt.id">
+          <div class="flex flex-col rounded-xl border transition-all text-xs overflow-hidden"
+               :class="{
+                 'bg-dark-800/90 border-indigo-500/30': evt.type === 'command',
+                 'bg-slate-900 border-white/5': evt.type === 'output',
+                 'bg-rose-950/30 border-rose-600/40': evt.type === 'error',
+                 'bg-brand-950/20 border-brand-500/30': evt.type === 'thought',
+                 'bg-emerald-950/20 border-emerald-500/30': evt.type === 'finish',
+                 'bg-indigo-950/40 border-indigo-500/40': evt.type === 'user_message',
+                 'bg-purple-950/30 border-purple-500/40': evt.type === 'agent_message'
+               }">
+            
+            <!-- Event Header -->
+            <div class="px-3 py-2 flex items-center justify-between bg-white/[0.02] border-b border-white/5 text-[11px]">
+              <div class="flex items-center gap-2">
+                <!-- Icon by type -->
+                <template x-if="evt.type === 'command'">
+                  <i data-lucide="terminal" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                </template>
+                <template x-if="evt.type === 'output'">
+                  <i data-lucide="file-text" class="w-3.5 h-3.5 text-slate-400 shrink-0"></i>
+                </template>
+                <template x-if="evt.type === 'error'">
+                  <i data-lucide="alert-octagon" class="w-3.5 h-3.5 text-rose-400 shrink-0"></i>
+                </template>
+                <template x-if="evt.type === 'thought'">
+                  <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400 shrink-0"></i>
+                </template>
+                <template x-if="evt.type === 'user_message'">
+                  <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-400 shrink-0"></i>
+                </template>
+                <template x-if="evt.type === 'agent_message'">
+                  <i data-lucide="bot" class="w-3.5 h-3.5 text-indigo-400 shrink-0"></i>
+                </template>
+
+                <span class="font-bold text-slate-200" x-text="evt.title"></span>
+              </div>
+              <span class="font-mono text-[10px] text-slate-500" x-text="evt.timestamp ? (evt.timestamp.includes('T') ? evt.timestamp.split('T')[1].split('.')[0] : evt.timestamp) : ''"></span>
+            </div>
+
+            <!-- Thought (if present) -->
+            <template x-if="evt.thought && evt.type !== 'thought'">
+              <div class="px-3 py-2 bg-purple-950/20 border-b border-white/5 text-[11px] text-purple-200/90 leading-relaxed">
+                <div class="flex items-center gap-1 font-semibold text-purple-300 text-[10px] mb-1">
+                  <i data-lucide="brain" class="w-3 h-3"></i>
+                  <span>تفکر و قصد ایجنت:</span>
+                </div>
+                <p class="whitespace-pre-wrap font-sans" x-text="evt.thought"></p>
+              </div>
+            </template>
+
+            <!-- Event Content / Body -->
+            <div class="p-3">
+              <template x-if="evt.type === 'command'">
+                <div class="font-mono text-[11px] text-emerald-300 bg-black/40 p-2.5 rounded-lg border border-white/5 overflow-x-auto" dir="ltr" x-text="evt.content"></div>
+              </template>
+
+              <template x-if="evt.type === 'output' || evt.type === 'error'">
+                <pre class="font-mono text-[11px] p-2.5 rounded-lg bg-black/50 border border-white/5 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight"
+                     :class="evt.type === 'error' ? 'text-rose-300' : 'text-slate-300'"
+                     dir="ltr" x-text="evt.content"></pre>
+              </template>
+
+              <template x-if="evt.type === 'thought'">
+                <p class="font-sans text-xs text-purple-200 whitespace-pre-wrap leading-relaxed" x-text="evt.content"></p>
+              </template>
+
+              <template x-if="evt.type === 'user_message' || evt.type === 'agent_message' || evt.type === 'finish'">
+                <div class="text-xs leading-relaxed whitespace-pre-wrap"
+                     :class="evt.type === 'user_message' ? 'text-emerald-200' : 'text-slate-200'"
+                     x-text="evt.content"></div>
+              </template>
+            </div>
+
+          </div>
+        </template>
+      </div>
+
+      <!-- Footer: Quick Prompts & Interactive Input -->
+      <div class="p-4 border-t border-white/10 bg-dark-800/90 flex flex-col gap-3">
+        
+        <!-- Quick Hint Pills -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
+          <span class="text-slate-400 shrink-0 font-medium ml-1">راهنمایی‌های سریع:</span>
+          <button type="button" @click="sendQuickPrompt('لطفاً تست‌ها را بدون محاسبه کاوریج اجرا کن: npm test -- --coverage=false')"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
+            ⚡ تست بدون کاوریج
+          </button>
+          <button type="button" @click="sendQuickPrompt('تست‌ها را با فلگ --passWithNoTests اجرا کن تا گیر نکند')"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
+            ⏭️ تست با --passWithNoTests
+          </button>
+          <button type="button" @click="sendQuickPrompt('خطای جاری را نادیده بگیر و ادامه مراحل را اجرا کن')"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
+            🛡️ نادیده گرفتن خطا
+          </button>
+          <button type="button" @click="sendQuickPrompt('وضعیت اجرای فعلی چیست و در چه مرحله‌ای هستی؟')"
+                  class="shrink-0 px-2.5 py-1 rounded-lg bg-dark-700 hover:bg-dark-600 border border-white/5 text-slate-300 hover:text-white transition">
+            ❓ گزارش وضعیت
+          </button>
+        </div>
+
+        <!-- Chat Input Box -->
+        <div class="flex items-center gap-2">
+          <div class="relative flex-1">
+            <input type="text" x-model="chatInput" @keydown.enter="sendChatMessage()"
+                   placeholder="پیام یا دستور مداخله برای ایجنت بنویسید (مثلاً: تست فلان کامپوننت را موقتا کامنت کن)..."
+                   class="w-full bg-dark-900 border border-white/10 rounded-xl py-2.5 px-4 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500">
+          </div>
+          
+          <button type="button" @click="sendChatMessage()" :disabled="isSendingChat || !chatInput.trim() || !activeConversationId"
+                  class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/20 shrink-0">
+            <template x-if="!isSendingChat">
+              <div class="flex items-center gap-1.5">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>ارسال پیام</span>
+              </div>
+            </template>
+            <template x-if="isSendingChat">
+              <div class="flex items-center gap-1.5">
+                <div class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>در حال ارسال...</span>
+              </div>
+            </template>
+          </button>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
   <script>
     function factoryApp() {
       return {
@@ -673,6 +1021,26 @@
           label: '',
           set_active: true
         },
+        showEngineModal: false,
+        engineConfig: {},
+        engineForm: {
+          mode: 'local',
+          local_base_url: 'http://127.0.0.1:8000',
+          local_api_key: '',
+          cloud_base_url: 'https://app.all-hands.dev',
+          cloud_api_key: ''
+        },
+        isTestingEngine: false,
+        showConsoleDrawer: false,
+        openhandsConversations: [],
+        activeConversationId: null,
+        activeConversation: null,
+        conversationEvents: [],
+        isEventsLoading: false,
+        isSendingChat: false,
+        isInterrupting: false,
+        chatInput: '',
+        consolePollTimer: null,
         selectedRepo: 'ali-ahadi1105/notion-test',
         pipelineData: {},
         isLaunching: false,
@@ -694,8 +1062,10 @@
         async initApp() {
           await this.fetchStatus();
           await this.fetchAccounts();
+          await this.fetchEngineConfig();
           await this.fetchTemplates();
           await this.fetchProjects();
+          await this.fetchConversationsList();
           if (this.projects.length > 0) {
             this.selectedRepo = this.projects[0].repo;
             await this.fetchPipeline(this.selectedRepo);
@@ -955,10 +1325,217 @@
             this.showToast(`مخزن ${this.trackRepoInput} اضافه شد`, 'success', 'check-circle');
             this.showTrackModal = false;
             this.trackRepoInput = '';
-            await this.fetchProjects();
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
           }
+        },
+
+        async fetchEngineConfig() {
+          try {
+            const res = await fetch('/api/openhands/config');
+            if (res.ok) {
+              this.engineConfig = await res.json();
+              this.engineForm.mode = this.engineConfig.mode || 'local';
+              this.engineForm.local_base_url = this.engineConfig.local?.base_url || 'http://127.0.0.1:8000';
+              this.engineForm.cloud_base_url = this.engineConfig.cloud?.base_url || 'https://app.all-hands.dev';
+            }
+          } catch (e) {
+            console.error('Failed to fetch engine config', e);
+          }
+        },
+
+        openEngineModal() {
+          this.fetchEngineConfig();
+          this.showEngineModal = true;
+          this.$nextTick(() => lucide.createIcons());
+        },
+
+        async saveEngineConfig() {
+          try {
+            const payload = {
+              mode: this.engineForm.mode,
+              local_base_url: this.engineForm.local_base_url,
+              local_api_key: this.engineForm.local_api_key || null,
+              cloud_base_url: this.engineForm.cloud_base_url,
+              cloud_api_key: this.engineForm.cloud_api_key || null,
+            };
+            const res = await fetch('/api/openhands/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('خطا در ذخیره تنظیمات');
+            this.engineConfig = await res.json();
+            this.showToast('تنظیمات موتور OpenHands با موفقیت ذخیره شد', 'success', 'check-circle');
+            this.showEngineModal = false;
+            await this.fetchStatus();
+            await this.fetchConversationsList();
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          }
+        },
+
+        async testEngineConnection() {
+          this.isTestingEngine = true;
+          try {
+            await this.fetchStatus();
+            if (this.systemStatus.openhands?.connected) {
+              this.showToast(`اتصال موتور برقرار است! نسخه: ${this.systemStatus.openhands.version || 'Active'}`, 'success', 'check-circle');
+            } else {
+              this.showToast(`عدم برقراری اتصال به موتور: ${this.systemStatus.openhands?.error || 'آفلاین'}`, 'error', 'alert-circle');
+            }
+          } catch (e) {
+            this.showToast('خطا در تست اتصال', 'error', 'alert-triangle');
+          } finally {
+            this.isTestingEngine = false;
+          }
+        },
+
+        async openConsoleDrawer(conversationId = null) {
+          this.showConsoleDrawer = true;
+          await this.fetchConversationsList();
+          if (conversationId) {
+            this.activeConversationId = conversationId;
+          } else if (!this.activeConversationId && this.openhandsConversations.length > 0) {
+            this.activeConversationId = this.openhandsConversations[0].id;
+          }
+          if (this.activeConversationId) {
+            await this.fetchEvents(this.activeConversationId);
+          }
+          this.$nextTick(() => {
+            lucide.createIcons();
+            const container = document.getElementById('consoleEventsContainer');
+            if (container) container.scrollTop = container.scrollHeight;
+          });
+
+          // Start polling every 4 seconds
+          if (this.consolePollTimer) clearInterval(this.consolePollTimer);
+          this.consolePollTimer = setInterval(() => {
+            if (this.showConsoleDrawer && this.activeConversationId) {
+              this.fetchEvents(this.activeConversationId, true);
+            }
+          }, 4000);
+        },
+
+        closeConsoleDrawer() {
+          this.showConsoleDrawer = false;
+          if (this.consolePollTimer) {
+            clearInterval(this.consolePollTimer);
+            this.consolePollTimer = null;
+          }
+        },
+
+        async fetchConversationsList() {
+          try {
+            const res = await fetch('/api/openhands/conversations');
+            if (res.ok) {
+              const data = await res.json();
+              this.openhandsConversations = data.conversations || [];
+            }
+          } catch (e) {
+            console.error('Failed to fetch OpenHands conversations', e);
+          }
+        },
+
+        async selectConversation(id) {
+          if (!id) return;
+          this.activeConversationId = id;
+          await this.fetchEvents(id);
+        },
+
+        async fetchEvents(id, background = false) {
+          if (!id) return;
+          if (!background) this.isEventsLoading = true;
+          try {
+            const res = await fetch(`/api/openhands/conversations/${id}/events`);
+            if (res.ok) {
+              const data = await res.json();
+              this.conversationEvents = data.events || [];
+              const matched = this.openhandsConversations.find(c => c.id === id);
+              this.activeConversation = {
+                id,
+                title: matched ? matched.title : 'گفتگو',
+                status: data.status || 'unknown'
+              };
+              if (!background) {
+                this.$nextTick(() => {
+                  const container = document.getElementById('consoleEventsContainer');
+                  if (container) container.scrollTop = container.scrollHeight;
+                });
+              }
+            }
+          } catch (e) {
+            console.error('Failed to fetch events', e);
+          } finally {
+            if (!background) this.isEventsLoading = false;
+            this.$nextTick(() => lucide.createIcons());
+          }
+        },
+
+        async sendChatMessage() {
+          if (!this.chatInput.trim() || !this.activeConversationId) return;
+          this.isSendingChat = true;
+          const msg = this.chatInput.trim();
+          try {
+            const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: msg, run: true })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'ارسال پیام ناموفق بود');
+            this.showToast('پیام شما به ایجنت ارسال شد و اجرا ادامه یافت', 'success', 'send');
+            this.chatInput = '';
+            await this.fetchEvents(this.activeConversationId);
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          } finally {
+            this.isSendingChat = false;
+          }
+        },
+
+        async sendQuickPrompt(promptText) {
+          this.chatInput = promptText;
+          await this.sendChatMessage();
+        },
+
+        async interruptAgent() {
+          if (!this.activeConversationId) return;
+          this.isInterrupting = true;
+          try {
+            const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/interrupt`, {
+              method: 'POST'
+            });
+            if (!res.ok) throw new Error('توقف ناموفق بود');
+            this.showToast('دستور توقف اضطراری ارسال شد. حلقه ایجنت متوقف گردید.', 'info', 'octagon-alert');
+            await this.fetchEvents(this.activeConversationId);
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          } finally {
+            this.isInterrupting = false;
+          }
+        },
+
+        async resumeAgent() {
+          if (!this.activeConversationId) return;
+          try {
+            const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/run`, {
+              method: 'POST'
+            });
+            if (!res.ok) throw new Error('اجرای مجدد ناموفق بود');
+            this.showToast('حلقه اجرای ایجنت فعال شد', 'success', 'play');
+            await this.fetchEvents(this.activeConversationId);
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+          }
+        },
+
+        getOpenHandsWebUrl(id) {
+          if (!id) return '#';
+          if (this.engineConfig?.mode === 'cloud') {
+            return `https://app.all-hands.dev/conversation/${id}`;
+          }
+          return `http://127.0.0.1:8000/conversation/${id}`;
         },
 
         translateStatus(status) {
