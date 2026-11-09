@@ -872,7 +872,8 @@
 
         <!-- Stream items -->
         <template x-for="evt in conversationEvents" :key="evt.id">
-          <div class="flex flex-col rounded-xl border transition-all text-xs overflow-hidden"
+          <div class="flex flex-col rounded-xl border transition-all text-xs overflow-hidden shrink-0"
+               style="flex-shrink: 0;"
                :class="{
                  'bg-dark-800/90 border-indigo-500/30': evt.type === 'command',
                  'bg-slate-900 border-white/5': evt.type === 'output',
@@ -908,7 +909,7 @@
 
                 <span class="font-bold text-slate-200" x-text="evt.title"></span>
               </div>
-              <span class="font-mono text-[10px] text-slate-500" x-text="evt.timestamp ? (evt.timestamp.includes('T') ? evt.timestamp.split('T')[1].split('.')[0] : evt.timestamp) : ''"></span>
+              <span class="font-mono text-[10px] text-slate-500" x-text="formatTimestamp(evt.timestamp)"></span>
             </div>
 
             <!-- Thought (if present) -->
@@ -931,17 +932,26 @@
               <template x-if="evt.type === 'output' || evt.type === 'error'">
                 <pre class="font-mono text-[11px] p-2.5 rounded-lg bg-black/50 border border-white/5 max-h-48 overflow-y-auto whitespace-pre-wrap leading-tight"
                      :class="evt.type === 'error' ? 'text-rose-300' : 'text-slate-300'"
-                     dir="ltr" x-text="evt.content"></pre>
+                     dir="ltr" x-text="evt.content || '(بدون خروجی متنی)'"></pre>
               </template>
 
               <template x-if="evt.type === 'thought'">
                 <p class="font-sans text-xs text-purple-200 whitespace-pre-wrap leading-relaxed" x-text="evt.content"></p>
               </template>
 
-              <template x-if="evt.type === 'user_message' || evt.type === 'agent_message' || evt.type === 'finish'">
-                <div class="text-xs leading-relaxed whitespace-pre-wrap"
-                     :class="evt.type === 'user_message' ? 'text-emerald-200' : 'text-slate-200'"
+              <template x-if="evt.type === 'user_message'">
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-200"
+                     x-text="evt.content || '(درخواست اجرای فاز توسط سامانه اتومیشن)'"></div>
+              </template>
+
+              <template x-if="evt.type === 'agent_message'">
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-slate-200"
                      x-text="evt.content"></div>
+              </template>
+
+              <template x-if="evt.type === 'finish'">
+                <div class="text-xs leading-relaxed whitespace-pre-wrap text-emerald-300 font-semibold"
+                     x-text="evt.content || 'فاز با موفقیت تکمیل شد.'"></div>
               </template>
             </div>
 
@@ -1536,6 +1546,19 @@
             return `https://app.all-hands.dev/conversation/${id}`;
           }
           return `http://127.0.0.1:8000/conversation/${id}`;
+        },
+
+        formatTimestamp(ts) {
+          if (!ts) return '';
+          try {
+            const parts = ts.split('T');
+            if (parts.length > 1) {
+              return parts[1].split('.')[0];
+            }
+            return ts;
+          } catch (e) {
+            return '';
+          }
         },
 
         translateStatus(status) {

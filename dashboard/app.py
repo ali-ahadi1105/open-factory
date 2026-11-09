@@ -275,6 +275,20 @@ def extract_text_content(content_obj: Any) -> str:
     return str(content_obj)
 
 
+ANSI_ESCAPE_RE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x1B\\|\x07)|\x1B[()][AB012])', re.DOTALL)
+
+def clean_terminal_text(text: str) -> str:
+    if not text:
+        return ""
+    cleaned = ANSI_ESCAPE_RE.sub("", text)
+    cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', cleaned)
+    # Remove CLI spinners (Braille pattern symbols)
+    cleaned = re.sub(r'[\u2800-\u28ff]+', '', cleaned)
+    # Remove lingering vte / bash prompt artifacts
+    cleaned = re.sub(r'^\d+;C\d+;vte\.shell\.preexec!?\s*', '', cleaned)
+    return cleaned.strip()
+
+
 def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
     kind = raw_ev.get("kind", "")
     eid = raw_ev.get("id") or str(uuid.uuid4())
@@ -328,6 +342,10 @@ def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
         else:
             content_text = str(obs)
 
+        cleaned_text = clean_terminal_text(content_text)
+        if not cleaned_text and not is_error:
+            cleaned_text = "دستور بدون خروجی متنی در ترمینال پایان یافت."
+
         return {
             "id": eid,
             "timestamp": ts,
@@ -336,7 +354,7 @@ def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
             "source": source,
             "title": f"خطای اجرای {tool_name or 'دستور'}" if is_error else f"خروجی {tool_name or 'دستور'}",
             "thought": "",
-            "content": content_text,
+            "content": cleaned_text,
             "tool_name": tool_name,
             "summary": "",
             "is_error": is_error,
