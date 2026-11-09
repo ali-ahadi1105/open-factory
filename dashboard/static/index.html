@@ -87,29 +87,30 @@
       x-data="factoryApp()" x-init="initApp()">
 
   <!-- Toast Notifications -->
-  <div class="fixed top-5 left-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none" dir="ltr">
+  <!-- Global High-Z Toast Notification Container -->
+  <div class="fixed top-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2.5 max-w-md w-full px-4 pointer-events-none" :dir="currentLang === 'fa' ? 'rtl' : 'ltr'">
     <template x-for="toast in toasts" :key="toast.id">
-      <div class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 border text-sm"
+      <div class="pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl transition-all duration-300 border text-xs font-semibold backdrop-blur-none"
            :class="{
-             'bg-emerald-950/90 text-emerald-200 border-emerald-700': toast.type === 'success',
-             'bg-rose-950/90 text-rose-200 border-rose-700': toast.type === 'error',
-             'bg-indigo-950/90 text-indigo-200 border-indigo-700': toast.type === 'info'
+             'bg-emerald-600 text-white border-emerald-500 shadow-emerald-950/30': toast.type === 'success',
+             'bg-rose-600 text-white border-rose-500 shadow-rose-950/30': toast.type === 'error',
+             'bg-slate-900 dark:bg-dark-800 text-white border-slate-700 shadow-slate-950/30': toast.type === 'info'
            }">
-        <svg x-show="toast.type === 'success'" class="w-5 h-5 shrink-0 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <svg x-show="toast.type === 'success'" class="w-5 h-5 shrink-0 text-white" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
-        <svg x-show="toast.type === 'error'" class="w-5 h-5 shrink-0 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <svg x-show="toast.type === 'error'" class="w-5 h-5 shrink-0 text-white" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="15" y1="9" x2="9" y2="15"></line>
           <line x1="9" y1="9" x2="15" y2="15"></line>
         </svg>
-        <svg x-show="toast.type !== 'success' && toast.type !== 'error'" class="w-5 h-5 shrink-0 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+        <svg x-show="toast.type !== 'success' && toast.type !== 'error'" class="w-5 h-5 shrink-0 text-indigo-300" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="10"></circle>
           <line x1="12" y1="16" x2="12" y2="12"></line>
           <line x1="12" y1="8" x2="12.01" y2="8"></line>
         </svg>
-        <div class="flex-1" x-text="toast.message"></div>
+        <div class="flex-1 leading-relaxed" x-text="toast.message"></div>
       </div>
     </template>
   </div>
@@ -1534,10 +1535,11 @@
           try {
             const res = await fetch(`/api/accounts/${login}/test`, { method: 'POST' });
             const data = await res.json();
-            if (data.valid) {
+            if (res.ok && (data.valid || data.status === 'ok')) {
               this.showToast(this.currentLang === 'fa' ? `توکن معتبر است (@${data.login})` : `Token is valid (@${data.login})`, 'success', 'check-circle');
             } else {
-              this.showToast(this.currentLang === 'fa' ? `توکن نامعتبر است: ${data.error}` : `Invalid token: ${data.error}`, 'error', 'alert-circle');
+              const errMsg = data.detail || data.error || (this.currentLang === 'fa' ? 'توکن نامعتبر است' : 'Invalid token');
+              this.showToast(this.currentLang === 'fa' ? `خطا در تست اتصال: ${errMsg}` : `Validation error: ${errMsg}`, 'error', 'alert-circle');
             }
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
@@ -1615,8 +1617,9 @@
             const targetUrl = this.engineForm.mode === 'cloud' ? this.engineForm.cloud_base_url : this.engineForm.local_base_url;
             const res = await fetch('/api/openhands/conversations?limit=1');
             const data = await res.json();
-            if (data.status === 'error') {
-              this.showToast(this.currentLang === 'fa' ? `اتصال ناموفق بود: ${data.message}` : `Connection failed: ${data.message}`, 'error', 'alert-circle');
+            if (!res.ok || data.status === 'error') {
+              const msg = data.message || data.detail || (this.currentLang === 'fa' ? 'امکان برقراری ارتباط با موتور هوش مصنوعی وجود ندارد' : 'Connection failed');
+              this.showToast(this.currentLang === 'fa' ? `اتصال ناموفق بود: ${msg}` : `Connection failed: ${msg}`, 'error', 'alert-circle');
             } else {
               this.showToast(this.currentLang === 'fa' ? `اتصال موفق به ${targetUrl}` : `Successfully connected to ${targetUrl}`, 'success', 'check-circle');
             }

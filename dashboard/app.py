@@ -727,6 +727,7 @@ def test_account(login: str):
         user_info = client.request("GET", "/user")
         return {
             "status": "ok",
+            "valid": True,
             "login": user_info.get("login"),
             "name": user_info.get("name"),
             "public_repos": user_info.get("public_repos"),
