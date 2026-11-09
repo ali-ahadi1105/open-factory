@@ -375,9 +375,30 @@ def inject_skill_into_repo(repo_path_str: str) -> bool:
 # ---------------------------------------------------------------------------
 # OpenHands Engine Management
 # ---------------------------------------------------------------------------
+def free_ports(*ports: int):
+    """Cleanly terminates any lingering or orphaned processes bound to the given ports."""
+    for port in ports:
+        try:
+            res = subprocess.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True, timeout=2)
+            if res.returncode == 0 and res.stdout.strip():
+                for pid_str in res.stdout.strip().split():
+                    try:
+                        pid = int(pid_str)
+                        os.kill(pid, signal.SIGTERM)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        try:
+            subprocess.run(["fuser", "-k", "-TERM", f"{port}/tcp"], capture_output=True, timeout=2)
+        except Exception:
+            pass
+    time.sleep(0.5)
+
+
 def check_openhands_health(base_url: str = "http://127.0.0.1:8000") -> bool:
     """Check if OpenHands API is reachable and alive."""
-    endpoints = ["/api/options", "/api/health", "/"]
+    endpoints = ["/server_info", "/health", "/alive", "/api/options", "/"]
     for ep in endpoints:
         url = f"{base_url.rstrip('/')}{ep}"
         try:
@@ -435,25 +456,37 @@ def launch_openhands_engine() -> bool:
         print(f"  {GREEN}✓{RESET} OpenHands Engine is already running ({local_url})")
         return True
 
-    # Launch local agent-canvas
-    npx_cmd = shutil.which("npx")
-    if not npx_cmd:
-        print(f"  {RED}✗{RESET} Cannot launch OpenHands: 'npx' is not installed.")
+    # Free conflicting stale ports (8000, 18000, 18001) before starting
+    free_ports(8000, 18000, 18001)
+
+    cmd = None
+    if shutil.which("agent-canvas"):
+        cmd = ["agent-canvas"]
+    elif shutil.which("npx"):
+        cmd = ["npx", "@openhands/agent-canvas"]
+    else:
+        print(f"  {RED}✗{RESET} Cannot launch OpenHands: neither 'agent-canvas' nor 'npx' is installed.")
         return False
 
     print(f"  {CYAN}▶{RESET} Starting OpenHands Agent Canvas on port 8000 in background...")
+    env = os.environ.copy()
+    local_bin = str(Path.home() / ".local" / "bin")
+    if local_bin not in env.get("PATH", ""):
+        env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
+
     oh_log_file = open(LOGS_DIR / "openhands.log", "a")
     proc = subprocess.Popen(
-        ["npx", "@openhands/agent-canvas"],
+        cmd,
         stdout=oh_log_file,
         stderr=subprocess.STDOUT,
         preexec_fn=os.setpgrp,
+        env=env,
     )
     (LOGS_DIR / "openhands.pid").write_text(str(proc.pid))
 
-    # Wait for OpenHands to come alive
+    # Wait for OpenHands to come alive (typically ~10-15s)
     print("  Waiting for OpenHands server to start", end="", flush=True)
-    for _ in range(30):
+    for _ in range(40):
         time.sleep(1)
         print(".", end="", flush=True)
         if check_openhands_health(local_url):
@@ -536,7 +569,9 @@ def stop_stack():
     print(f"{BOLD}Stopping Open Factory stack...{RESET}")
     stop_process("dashboard.pid", "Dashboard Server")
     stop_process("openhands.pid", "OpenHands Agent Canvas")
+    free_ports(8080, 8000, 18000, 18001)
     print(f"{GREEN}✓ All services stopped.{RESET}")
+
 
 
 # ---------------------------------------------------------------------------
