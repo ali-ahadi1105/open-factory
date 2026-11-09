@@ -1,12 +1,76 @@
-# OpenHands Autonomous Software Factory (v2)
+# Open Factory (Autonomous Software Factory v2)
 
-An upgraded, autonomous Software Factory for [OpenHands](https://github.com/All-Hands-AI/OpenHands) and GitHub.
+An autonomous Software Factory powered by [OpenHands](https://github.com/All-Hands-AI/OpenHands) and GitHub.
 
-In addition to the standard OpenHands station pipeline, this enhanced version introduces **autonomous requirements decomposition** and **automated label/phase transition orchestration**. You only need to describe your project requirements, bug fix, or feature request once—the factory breaks it down, creates dependent GitHub issues, and automatically drives execution from Phase 1 to completion.
+Open Factory delivers **autonomous requirements decomposition (DAG)**, **event-driven phase orchestration**, **automated PR healing (CI / review feedback loop)**, and a **developer-friendly Live Agent Console & Interactive Dashboard**.
 
 ---
 
-## What It Sets Up
+## ⚡ Quick Start (Zero-Config)
+
+Developers can bootstrap the entire stack with a single command:
+
+```bash
+# 1. Clone repository
+git clone https://github.com/ali-ahadi1105/open-factory.git
+cd open-factory
+
+# 2. Start the factory (Bootstraps prerequisites, GitHub auth, skill injection, engine & dashboard)
+./factory up
+```
+
+That's it! `./factory up` automatically:
+1. **Checks prerequisites** (`Python >= 3.10`, `uv`, `Node/npx`, `gh`, `Docker`).
+2. **Detects GitHub credentials** via `gh auth token` (zero-touch) or interactive PAT input.
+3. **Injects & registers the `ali-factory` skill** directly into OpenHands (`~/.openhands/skills/ali-factory/`).
+4. **Launches OpenHands Engine** (Local Agent Canvas or validates Cloud configuration).
+5. **Starts the Dashboard server** on `http://localhost:8080` and opens your browser.
+
+---
+
+## 🎮 Developer CLI Commands
+
+| Command | Description |
+|---|---|
+| `./factory up` (or `./factory`) | Start everything: preflight checks, skill injection, OpenHands, and Dashboard |
+| `./factory status` | Show real-time health, active GitHub account, OpenHands status, and skill injection state |
+| `./factory down` (or `./factory stop`) | Cleanly terminate all running factory services and free occupied ports |
+| `./factory skill sync` | Re-sync local `ali-factory` skill files to OpenHands |
+| `./factory skill inject <repo-path>` | Inject the `ali-factory` skill directly into any target repository (`.openhands/skills/ali-factory`) |
+| `./factory logs [dashboard\|openhands]` | View or follow service logs in real time (`-f` to follow) |
+
+---
+
+## 🚀 Key Features
+
+### 1. Requirements Decomposition & Phased DAG
+Describe your project or feature spec once in markdown (e.g. `spec.md`). Open Factory breaks it down into a directed acyclic graph (DAG) of GitHub issues:
+- **Phase 1:** Labeled `openhands` (triggers immediate implementation).
+- **Phases 2+:** Labeled `blocked` with explicit `blocked-by:#<issue_id>` dependencies.
+
+### 2. Event-Driven Phase Orchestration
+When Phase 1's pull request passes CI and is merged:
+- The Phase Orchestrator automatically inspects dependent issues.
+- It removes `blocked`, applies the `openhands` trigger label, and smoothly transitions execution to Phase 2.
+
+### 3. Automated PR Healing Loop
+If CI tests fail or a code review requests changes:
+- The PR Auto-Healer gathers the error trace and review comments.
+- It applies `openhands-fix` (up to 3 retries) instructing the agent to resolve the issues autonomously.
+- If it cannot be resolved automatically, it escalates with `needs-human-attention`.
+
+### 4. Live Agent Console & Interactive HITL Chat
+- Real-time event streaming and thought-bubble inspection.
+- Human-in-the-loop (HITL) interactive chat: send instructions or clarifications directly to OpenHands if an agent gets stuck.
+- Emergency interrupt and resume controls.
+
+### 5. Multi-Engine & Multi-Account Support
+- Seamlessly toggle between **Local Agent Canvas** (`http://127.0.0.1:8000`) and **OpenHands Cloud** (`https://app.all-hands.dev`).
+- Multi-account GitHub management with active token switching in the UI.
+
+---
+
+## 🏗️ Stations Overview
 
 | Station | Catalog ID | Role | Phase |
 |---|---|---|---|
@@ -22,134 +86,39 @@ In addition to the standard OpenHands station pipeline, this enhanced version in
 
 ---
 
-## The Autonomous End-to-End Workflow
-
-```text
-[High-Level User Requirement / Spec]
-               │
-               ▼
-┌───────────────────────────────────────────────┐
-│ 1. Requirements Planner (factory.py plan)     │
-│ - Decomposes spec into ordered phases (DAG)   │
-│ - Creates GitHub issues with dependencies     │
-│ - Labels Phase 1: `openhands` (Triggered)     │
-│ - Labels Phase 2+: `blocked` + `blocked-by:#` │
-└──────────────────────┬────────────────────────┘
-                       │
-                       ▼
-┌───────────────────────────────────────────────┐
-│ 2. Implementation Cycle (Issue to PR)         │
-│ - Implements issue & opens pull request       │
-└──────────────────────┬────────────────────────┘
-                       │
-                       ▼
-┌───────────────────────────────────────────────┐
-│ 3. CI Checks & Code Review                    │
-│ - GitHub Actions runs test suite              │
-│ - PR Reviewer posts feedback                  │
-└──────────────┬─────────────────┬──────────────┘
-               │                 │
-    [Tests Fail / Review Has     │ [CI Green &
-       Changes Requested]        │  Review Approved]
-               │                 │
-               ▼                 ▼
-┌───────────────────────────┐ ┌───────────────────────────┐
-│ 4. PR Auto-Healer         │ │ 5. Delivery Watchdog      │
-│ - Gathers error context   │ │ - Automatically merges PR │
-│ - Sets review status fail │ └─────────────┬─────────────┘
-│ - Adds label `openhands-  │               │
-│   fix` (Retries: 1..3)    │               │
-│ - Loops back to step 2 ───┘               ▼ (PR Merged)
-│ (Escalates to `needs-       ┌───────────────────────────┐
-│  human-attention` if max)   │ 6. Phase Orchestrator     │
-│                             │ - Unlocks dependent phase │
-│                             │ - Adds `openhands` label  │
-│                             │ ➔ Starts next phase!      │
-│                             └───────────────────────────┘
-```
-
----
-
-## Quick Start & Commands
-
-Set your environment variables:
-```bash
-export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_..."
-export OPENHANDS_HOST="http://localhost:3000"  # or your OpenHands instance
-export OPENHANDS_AUTOMATION_API_KEY="..."       # or OPENHANDS_API_KEY
-```
-
-### 1. Requirements Planning (`plan`)
-Convert a feature description or spec file into phased issues on GitHub:
-```bash
-# Preview plan without touching GitHub (dry-run)
-python3 scripts/factory.py plan --repos owner/repo --spec-file requirement.md --dry-run
-
-# Create issues on GitHub
-python3 scripts/factory.py plan --repos owner/repo --spec-file requirement.md
-```
-
-### 2. Install GitHub Actions Orchestrator & Healer (Zero-Server Option)
-Install the event-driven workflow into the target repository so GitHub automatically advances phases on PR merge and triggers auto-healing on CI/review failures:
-```bash
-python3 scripts/factory.py install-orchestrator --repos owner/repo
-```
-
-### 3. Check / Run Orchestrator & Healer Manually
-```bash
-# Unblock any satisfied phases
-python3 scripts/factory.py orchestrate --repos owner/repo
-
-# Diagnose and trigger fixes for broken PRs
-python3 scripts/factory.py heal --repos owner/repo
-
-# Concurrently monitor phase transitions and heal PRs in real time
-python3 scripts/factory.py watch --repos owner/repo --interval 30
-
-# View full pipeline graph and phase statuses
-python3 scripts/factory.py graph --repos owner/repo
-```
-
-### 4. Create Standard OpenHands Stations
-```bash
-# Preflight checks
-python3 scripts/factory.py preflight --repos owner/repo
-
-# Create stations (including orchestrator and healer)
-python3 scripts/factory.py create --repos owner/repo --ids github-issue-to-pr,github-pr-reviewer,github-phase-orchestrator,github-pr-healer,github-delivery-watchdog
-
-# Verify and enable
-python3 scripts/factory.py verify <automation_ids>
-```
-
----
-
-## Directory Structure
+## 📁 Repository Structure
 
 ```text
 open-factory/
-├── README.md                      # This document
-├── SKILL.md                       # OpenHands skill definition
-├── commands/
-│   ├── software-factory.md        # /software-factory command
-│   └── factory-plan.md            # /factory-plan command
+├── factory                        # Root executable bootstrapper
+├── README.md                      # Project documentation
+├── SKILL.md                       # ali-factory skill definition (injected into OpenHands)
+├── dashboard/                     # FastAPI backend & reactive Tailwind UI
+│   ├── app.py                     # Dashboard server & OpenHands REST proxy
+│   └── static/index.html          # Single-page dashboard & Live Agent Console
 ├── scripts/
-│   ├── factory.py                 # Core CLI helper
+│   ├── factory_cli.py             # CLI implementation, port manager & skill sync
+│   ├── factory.py                 # Core automation and station catalog runner
 │   ├── planner.py                 # Requirements decomposition & DAG generation
 │   ├── orchestrator.py            # State machine & phase transition engine
-│   ├── healer.py                  # CI & Review diagnostic & auto-healing engine
-│   └── github_client.py           # Python stdlib GitHub API client
-├── templates/
-│   └── factory-orchestrator.yml   # Event-driven GitHub Actions workflow
-├── automations/
-│   └── catalog/
-│       ├── github-phase-orchestrator/ # Phase unlocking automation station
-│       │   ├── manifest.json
-│       │   └── worker.py
-│       └── github-pr-healer/          # PR healing automation station
-│           ├── manifest.json
-│           └── worker.py
-└── tests/
-    └── test_factory_v2.py         # Full test suite
+│   ├── healer.py                  # CI & review diagnostic & auto-healing engine
+│   └── github_client.py           # GitHub API client
+├── commands/                      # Slash commands for OpenHands
+├── templates/                     # GitHub Actions workflow templates
+└── tests/                         # Unit tests (100% passing)
 ```
 
+---
+
+## 🧪 Testing
+
+Run the full test suite with:
+
+```bash
+uv run --with fastapi --with uvicorn python3 -m unittest discover tests
+```
+
+---
+
+## 📄 License
+MIT License.
