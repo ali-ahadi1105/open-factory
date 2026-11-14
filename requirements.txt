@@ -1,0 +1,4 @@
+# OpenHands Software Factory Dashboard Dependencies
+fastapi>=0.110.0
+uvicorn>=0.28.0
+pydantic>=2.0.0

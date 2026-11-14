@@ -521,6 +521,15 @@ def launch_dashboard(port: int = 8080) -> bool:
     if uv_cmd:
         cmd = ["uv", "run", "--with", "fastapi", "--with", "uvicorn", "python3", "dashboard/app.py"]
     else:
+        try:
+            import fastapi, uvicorn
+        except ImportError:
+            print(f"  {CYAN}▶{RESET} Installing required dependencies (fastapi, uvicorn)...")
+            req_file = REPO_ROOT / "requirements.txt"
+            if req_file.exists():
+                subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(req_file)], check=False)
+            else:
+                subprocess.run([sys.executable, "-m", "pip", "install", "-q", "fastapi", "uvicorn"], check=False)
         cmd = [sys.executable, "dashboard/app.py"]
 
     print(f"  {CYAN}▶{RESET} Starting Dashboard server on port {port} in background...")
