@@ -845,6 +845,7 @@ def list_projects():
 
 
 @app.post("/api/projects/track")
+@app.post("/api/track")
 def track_project(req: TrackRequest):
     client = get_client()
     repo = req.repo.strip()
@@ -859,6 +860,7 @@ def track_project(req: TrackRequest):
 
 
 @app.post("/api/projects/launch")
+@app.post("/api/launch")
 def launch_project(req: LaunchRequest):
     client = get_client(account_login=req.account_login)
     raw_repo = req.repo_name.strip()
