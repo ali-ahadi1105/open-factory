@@ -228,8 +228,13 @@ def build_issue_body(
         "factory_phase": task.phase,
         "blocked_by": dep_issue_numbers,
     }
-    parts.append(f"\n<!-- software-factory-metadata: {json.dumps(metadata)} -->")
-    return "\n".join(parts)
+    meta_tag = f"\n<!-- software-factory-metadata: {json.dumps(metadata)} -->"
+    parts.append(meta_tag)
+    body_str = "\n".join(parts)
+    if len(body_str) > 65000:
+        # GitHub issue body limit is 65536 characters; truncate safely while preserving metadata
+        body_str = body_str[:64000] + "\n\n> [!WARNING]\n> Phase description truncated to fit GitHub 65K character limit.\n" + meta_tag
+    return body_str
 
 
 def execute_plan(
