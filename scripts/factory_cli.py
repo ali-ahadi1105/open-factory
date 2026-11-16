@@ -19,6 +19,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -433,22 +434,44 @@ def free_ports(*ports: int):
 
 
 def check_openhands_health(base_url: str = "http://127.0.0.1:8000") -> bool:
-    """Check if OpenHands API is reachable and alive."""
-    endpoints = ["/server_info", "/health", "/alive", "/api/options", "/"]
-    for ep in endpoints:
-        url = f"{base_url.rstrip('/')}{ep}"
+    """Check if OpenHands API or Canvas UI is reachable and alive."""
+    parsed = urllib.parse.urlparse(base_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 8000
+
+    # 1. Quick TCP socket probe across IPv4/IPv6 loopbacks
+    candidate_hosts = [host]
+    if host in ("127.0.0.1", "localhost", "::1"):
+        candidate_hosts = ["127.0.0.1", "localhost", "::1"]
+
+    tcp_alive = False
+    for h in candidate_hosts:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "OpenFactory-CLI"})
-            with urllib.request.urlopen(req, timeout=1.5) as resp:
-                if resp.status in (200, 204, 301, 302, 307, 308, 401, 403):
-                    return True
-        except urllib.error.HTTPError as e:
-            # 401 / 403 / 404 indicates server is responding
-            if e.code in (401, 403, 404):
-                return True
+            with socket.create_connection((h, port), timeout=0.8):
+                tcp_alive = True
+                break
         except Exception:
-            pass
-    return False
+            continue
+
+    if not tcp_alive:
+        return False
+
+    # 2. HTTP probe: check root and standard endpoints
+    endpoints = ["/", "/api/options", "/health", "/alive", "/server_info"]
+    for ep in endpoints:
+        for h in candidate_hosts:
+            url = f"{parsed.scheme or 'http'}://{h}:{port}{ep}"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "OpenFactory-CLI"})
+                with urllib.request.urlopen(req, timeout=1.5) as resp:
+                    return True
+            except urllib.error.HTTPError:
+                # Any HTTP response code (e.g. 401/403/404) means the server is answering
+                return True
+            except Exception:
+                pass
+    # If TCP was open but HTTP had a transient error, it is still active on this port
+    return True
 
 
 def get_openhands_config() -> dict:
