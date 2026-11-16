@@ -40,10 +40,14 @@ def parse_markdown_spec(content: str) -> list[PlanTask]:
     current_deps: list[int] = []
     current_labels: list[str] = []
     in_criteria = False
+    dep_declared = False
 
     def commit_task():
-        nonlocal current_phase, current_title, current_summary, current_criteria, current_deps, current_labels, in_criteria
+        nonlocal current_phase, current_title, current_summary, current_criteria, current_deps, current_labels, in_criteria, dep_declared
         if current_phase is not None and current_title:
+            # If dependencies were not explicitly declared, default sequential dependency to previous phase
+            if not dep_declared and tasks:
+                current_deps = [tasks[-1].phase]
             tasks.append(
                 PlanTask(
                     phase=current_phase,
@@ -61,6 +65,7 @@ def parse_markdown_spec(content: str) -> list[PlanTask]:
         current_deps = []
         current_labels = []
         in_criteria = False
+        dep_declared = False
 
     phase_header_re = re.compile(r"^##\s+Phase\s+(\d+)[:\-]?\s*(.*)", re.IGNORECASE)
     deps_re = re.compile(r"^\*{0,2}(?:Depends on|Blockers?|Requires):\*{0,2}\s*(.*)", re.IGNORECASE)
@@ -79,6 +84,7 @@ def parse_markdown_spec(content: str) -> list[PlanTask]:
         stripped = line.strip()
         dep_match = deps_re.match(stripped)
         if dep_match:
+            dep_declared = True
             dep_text = dep_match.group(1)
             found_phases = re.findall(r"(?:Phase\s*)?(\d+)", dep_text, re.IGNORECASE)
             for dp in found_phases:

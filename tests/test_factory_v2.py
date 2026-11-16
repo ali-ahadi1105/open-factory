@@ -42,6 +42,37 @@ Build login and register.
         self.assertEqual(tasks[1].title, "API Endpoints")
         self.assertEqual(tasks[1].depends_on_phases, [1])
 
+    def test_parse_markdown_implicit_sequential_dependencies(self):
+        doc = """
+## Phase 1: Setup
+Scaffold project.
+
+## Phase 2: Feature A
+Add feature A.
+
+## Phase 3: Feature B
+Add feature B.
+"""
+        tasks = parse_markdown_spec(doc)
+        self.assertEqual(len(tasks), 3)
+        self.assertEqual(tasks[0].depends_on_phases, [])
+        self.assertEqual(tasks[1].depends_on_phases, [1])
+        self.assertEqual(tasks[2].depends_on_phases, [2])
+
+    def test_parse_markdown_explicit_none_dependency(self):
+        doc = """
+## Phase 1: Setup
+Scaffold project.
+
+## Phase 2: Independent Feature
+Depends on: none
+Add independent feature.
+"""
+        tasks = parse_markdown_spec(doc)
+        self.assertEqual(len(tasks), 2)
+        self.assertEqual(tasks[0].depends_on_phases, [])
+        self.assertEqual(tasks[1].depends_on_phases, [])
+
     def test_dag_cycle_validation(self):
         # Phase 1 depends on Phase 2 (forward/cyclic)
         bad_tasks = [

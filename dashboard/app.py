@@ -514,12 +514,14 @@ TEMPLATES = [
         "spec": """# Modern Web Workspace Application
 
 ## Phase 1: Foundation, Layout & Navigation
+Depends on: none
 Create Next.js 14 project structure with TypeScript and Tailwind CSS.
 - Responsive app shell with Collapsible Sidebar, Header, and Main Content canvas.
 - Theme support (Dark/Light mode).
 - Unit tests for navigation components with Jest and React Testing Library.
 
 ## Phase 2: Hierarchical Document Store & CRUD
+Depends on: Phase 1
 Implement full client-side state management layer with Zustand and LocalStorage persistence.
 - Data models for Documents, Folders, and Metadata.
 - Full CRUD operations: create, read, update, soft-delete, and restore from trash.
@@ -527,6 +529,7 @@ Implement full client-side state management layer with Zustand and LocalStorage 
 - Unit tests for store operations and edge cases.
 
 ## Phase 3: Interactive Modular Editor
+Depends on: Phase 2
 Build rich modular content editor with keyboard shortcuts and slash commands.
 - Slash command menu (/h1, /todo, /bullet, /code, /quote).
 - Markdown auto-formatting and keyboard navigation.
@@ -534,6 +537,7 @@ Build rich modular content editor with keyboard shortcuts and slash commands.
 - Component tests for editor interactions.
 
 ## Phase 4: Full-Text Search, Cover Images & Export
+Depends on: Phase 3
 Finalize workspace productivity features.
 - Full-text search modal with fuzzy query matching and recent searches.
 - Cover image selector with gradient presets and Unsplash URLs.
@@ -550,6 +554,7 @@ Finalize workspace productivity features.
         "spec": """# Cloud Task & Automation Microservice
 
 ## Phase 1: Project Scaffolding & Database Layer
+Depends on: none
 Set up Python FastAPI application with clean architecture.
 - SQLAlchemy 2.0 async engine and SQLite/PostgreSQL support.
 - Pydantic v2 schemas and base database models.
@@ -557,6 +562,7 @@ Set up Python FastAPI application with clean architecture.
 - Unit tests with pytest and testcontainers/sqlite.
 
 ## Phase 2: User Authentication & Tenant Management
+Depends on: Phase 1
 Implement secure authentication and user authorization layer.
 - User registration, password hashing with bcrypt, and JWT token issuing.
 - Role-based access control (Admin, Member, Viewer).
@@ -564,6 +570,7 @@ Implement secure authentication and user authorization layer.
 - Pytest suite covering token expiry, invalid credentials, and roles.
 
 ## Phase 3: Core Domain CRUD & Background Tasks
+Depends on: Phase 2
 Implement core resource management and asynchronous processing.
 - Full REST endpoints for Tasks and Workspaces (filtering, pagination, sorting).
 - Background worker tasks for webhook dispatching and email notifications.
@@ -571,6 +578,7 @@ Implement core resource management and asynchronous processing.
 - API integration tests covering full lifecycle.
 
 ## Phase 4: OpenAPI Docs, Rate Limiting & Production Docker
+Depends on: Phase 3
 Production readiness and deployment packaging.
 - OpenAPI schema refinement with request/response examples.
 - Rate limiting middleware with Redis/in-memory fallback.
@@ -587,6 +595,7 @@ Production readiness and deployment packaging.
         "spec": """# DevPulse - Developer Workflow CLI
 
 ## Phase 1: Core Engine & Subcommand Dispatcher
+Depends on: none
 Set up clean modular Python CLI application.
 - Entrypoint structure with argparse and command dispatchers.
 - Configuration file loader (.devpulse.json / YAML) with fallback defaults.
@@ -594,6 +603,7 @@ Set up clean modular Python CLI application.
 - Unit tests with pytest verifying argument parsing and flags.
 
 ## Phase 2: Repository Scanner & Metric Collector
+Depends on: Phase 1
 Build static analysis and git metric extraction engine.
 - Git history analyzer (commits per author, churn rate, stale branches).
 - Codebase statistics calculator (file types, SLOC, TODO comments).
@@ -601,6 +611,7 @@ Build static analysis and git metric extraction engine.
 - Comprehensive tests using temporary git repositories.
 
 ## Phase 3: Rich Terminal Visualization & Interactive TUI
+Depends on: Phase 2
 Add rich terminal UI formatting.
 - Colored outputs, progress bars, and ASCII tables using `rich`.
 - Interactive prompts for guided actions and configuration wizards.
