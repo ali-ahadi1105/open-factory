@@ -54,7 +54,10 @@ class GitHubClient:
         body: dict | None = None,
         params: dict | None = None,
         raw_body: bytes | None = None,
+        data: dict | None = None,
     ) -> Any:
+        if body is None and data is not None:
+            body = data
         url = f"{self.base_url}{path}"
         if params:
             query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})

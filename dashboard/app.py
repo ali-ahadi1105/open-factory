@@ -891,10 +891,10 @@ def launch_project(req: LaunchRequest):
             }
             try:
                 if repo.split("/")[0] == current_user:
-                    client.request("POST", "/user/repos", data=create_payload)
+                    client.request("POST", "/user/repos", body=create_payload)
                 else:
                     org = repo.split("/")[0]
-                    client.request("POST", f"/orgs/{org}/repos", data=create_payload)
+                    client.request("POST", f"/orgs/{org}/repos", body=create_payload)
                 repo_created = True
                 time.sleep(2)  # Wait for GitHub eventually-consistent repo creation
             except Exception as create_err:

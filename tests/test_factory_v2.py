@@ -343,6 +343,15 @@ class TestDashboardAccounts(unittest.TestCase):
                 client_b = get_client(account_login="user-b")
                 self.assertEqual(client_b.token, "ghp_tokenB67890")
 
+    def test_github_client_data_keyword_arg(self):
+        from github_client import GitHubClient
+        client = GitHubClient(token="mock_token")
+        # Should not raise TypeError: got an unexpected keyword argument 'data'
+        try:
+            client.request("POST", "/test", data={"hello": "world"})
+        except Exception as e:
+            self.assertNotIsInstance(e, TypeError)
+
 
 if __name__ == "__main__":
     unittest.main()
