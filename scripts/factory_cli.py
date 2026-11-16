@@ -534,14 +534,18 @@ def launch_dashboard(port: int = 8080) -> bool:
 
     print(f"  {CYAN}▶{RESET} Starting Dashboard server on port {port} in background...")
     dash_log_file = open(LOGS_DIR / "dashboard.log", "a")
+    dash_env = os.environ.copy()
+    dash_env["PORT"] = str(port)
     proc = subprocess.Popen(
         cmd,
         cwd=str(REPO_ROOT),
+        env=dash_env,
         stdout=dash_log_file,
         stderr=subprocess.STDOUT,
         preexec_fn=os.setpgrp,
     )
     (LOGS_DIR / "dashboard.pid").write_text(str(proc.pid))
+    (LOGS_DIR / "dashboard.port").write_text(str(port))
 
     # Wait for dashboard to become healthy
     print("  Waiting for dashboard server", end="", flush=True)
@@ -578,7 +582,13 @@ def stop_stack():
     print(f"{BOLD}Stopping Open Factory stack...{RESET}")
     stop_process("dashboard.pid", "Dashboard Server")
     stop_process("openhands.pid", "OpenHands Agent Canvas")
-    free_ports(8080, 8000, 18000, 18001)
+    active_port = 8080
+    if (LOGS_DIR / "dashboard.port").exists():
+        try:
+            active_port = int((LOGS_DIR / "dashboard.port").read_text().strip())
+        except Exception:
+            active_port = 8080
+    free_ports(active_port, 8080, 8000, 18000, 18001)
     print(f"{GREEN}✓ All services stopped.{RESET}")
 
 
@@ -591,12 +601,18 @@ def print_status():
     print(f"{BOLD}STACK STATUS & DIAGNOSTICS:{RESET}\n")
 
     # 1. Dashboard
-    dash_ok = check_dashboard_health(8080)
+    active_port = 8080
+    if (LOGS_DIR / "dashboard.port").exists():
+        try:
+            active_port = int((LOGS_DIR / "dashboard.port").read_text().strip())
+        except Exception:
+            active_port = 8080
+    dash_ok = check_dashboard_health(active_port)
     dash_pid = (LOGS_DIR / "dashboard.pid").read_text().strip() if (LOGS_DIR / "dashboard.pid").exists() else None
     if dash_ok:
-        print(f"  • {BOLD}Dashboard Server:{RESET}      {GREEN}RUNNING{RESET} on http://localhost:8080 {DIM}(PID: {dash_pid or 'active'}){RESET}")
+        print(f"  • {BOLD}Dashboard Server:{RESET}      {GREEN}RUNNING{RESET} on http://localhost:{active_port} {DIM}(PID: {dash_pid or 'active'}){RESET}")
     else:
-        print(f"  • {BOLD}Dashboard Server:{RESET}      {RED}STOPPED{RESET} (port 8080)")
+        print(f"  • {BOLD}Dashboard Server:{RESET}      {RED}STOPPED{RESET} (port {active_port})")
 
     # 2. OpenHands Engine
     oh_cfg = get_openhands_config()
