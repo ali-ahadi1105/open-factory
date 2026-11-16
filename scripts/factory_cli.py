@@ -38,6 +38,27 @@ OPENHANDS_SKILLS_DIR = OPENHANDS_DIR / "skills"
 OPENHANDS_INSTALLED_DIR = OPENHANDS_SKILLS_DIR / "installed"
 OPENHANDS_SETTINGS_FILE = OPENHANDS_DIR / "settings.json"
 
+def load_dotenv(env_path: Path | None = None):
+    """Zero-dependency .env loader that populates os.environ."""
+    if env_path is None:
+        env_path = REPO_ROOT / ".env"
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip("'\"")
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except Exception:
+        pass
+
+load_dotenv()
+
 # ANSI colors
 RESET = "\033[0m"
 BOLD = "\033[1m"
@@ -582,12 +603,12 @@ def stop_stack():
     print(f"{BOLD}Stopping Open Factory stack...{RESET}")
     stop_process("dashboard.pid", "Dashboard Server")
     stop_process("openhands.pid", "OpenHands Agent Canvas")
-    active_port = 8080
+    active_port = int(os.environ.get("PORT", 8080))
     if (LOGS_DIR / "dashboard.port").exists():
         try:
             active_port = int((LOGS_DIR / "dashboard.port").read_text().strip())
         except Exception:
-            active_port = 8080
+            pass
     free_ports(active_port, 8080, 8000, 18000, 18001)
     print(f"{GREEN}✓ All services stopped.{RESET}")
 
@@ -601,12 +622,12 @@ def print_status():
     print(f"{BOLD}STACK STATUS & DIAGNOSTICS:{RESET}\n")
 
     # 1. Dashboard
-    active_port = 8080
+    active_port = int(os.environ.get("PORT", 8080))
     if (LOGS_DIR / "dashboard.port").exists():
         try:
             active_port = int((LOGS_DIR / "dashboard.port").read_text().strip())
         except Exception:
-            active_port = 8080
+            pass
     dash_ok = check_dashboard_health(active_port)
     dash_pid = (LOGS_DIR / "dashboard.pid").read_text().strip() if (LOGS_DIR / "dashboard.pid").exists() else None
     if dash_ok:
@@ -687,9 +708,10 @@ def main():
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
     # 'up' / 'start'
+    default_port = int(os.environ.get("PORT", 8080))
     p_up = subparsers.add_parser("up", help="Bootstrap and start the complete Open Factory stack")
     p_up.add_argument("--no-browser", action="store_true", help="Do not automatically open the browser")
-    p_up.add_argument("--port", type=int, default=8080, help="Dashboard port (default: 8080)")
+    p_up.add_argument("--port", type=int, default=default_port, help=f"Dashboard port (default: {default_port})")
 
     # 'down' / 'stop'
     subparsers.add_parser("down", help="Stop running Open Factory services")

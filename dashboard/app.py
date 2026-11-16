@@ -37,6 +37,27 @@ PROJECTS_FILE = DASHBOARD_DIR / "projects.json"
 ACCOUNTS_FILE = DASHBOARD_DIR / "accounts.json"
 OPENHANDS_CONFIG_FILE = DASHBOARD_DIR / "openhands_config.json"
 
+def load_dotenv(env_path: Path | None = None):
+    """Zero-dependency .env loader that populates os.environ."""
+    if env_path is None:
+        env_path = DASHBOARD_DIR.parent / ".env"
+    if not env_path.is_file():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip("'\"")
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except Exception:
+        pass
+
+load_dotenv()
+
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 from github_client import GitHubClient, GitHubError, get_token
