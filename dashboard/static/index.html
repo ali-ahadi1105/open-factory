@@ -1062,6 +1062,19 @@
 
           </div>
         </template>
+
+        <!-- Live Agent Thinking & Processing Loader -->
+        <div x-show="isAgentThinking || (activeConversation && activeConversation.status === 'running')"
+             class="flex items-center gap-3 p-3.5 rounded-xl bg-brand-50/70 dark:bg-brand-950/20 border border-brand-200 dark:border-brand-500/30 text-xs text-brand-700 dark:text-brand-300 shrink-0 animate-pulse">
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="w-2 h-2 rounded-full bg-brand-500 animate-ping"></span>
+            <div class="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+          <div class="flex flex-col gap-0.5">
+            <span class="font-bold text-xs" x-text="t('agent_thinking_indicator')"></span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400" x-text="t('agent_thinking_subindicator')"></span>
+          </div>
+        </div>
       </div>
 
       <!-- Footer: Quick Prompts & Interactive Input -->
@@ -1230,7 +1243,9 @@
         no_conversations_yet: "-- هنوز گفتگویی آغاز نشده است --",
         new_conversation_btn: "گفتگوی جدید +",
         no_conversation_active_hint: "هنوز هیچ گفتگوی فعالی در OpenHands انتخاب نشده است",
-        no_conversation_active_subhint: "پیامی در کادر پایین بنویسید و ارسال کنید، یا روی «گفتگوی جدید» کلیک کنید تا ارتباط با ایجنت برقرار شود."
+        no_conversation_active_subhint: "پیامی در کادر پایین بنویسید و ارسال کنید، یا روی «گفتگوی جدید» کلیک کنید تا ارتباط با ایجنت برقرار شود.",
+        agent_thinking_indicator: "ایجنت در حال تحلیل پرامپت و پردازش در محیط کار است...",
+        agent_thinking_subindicator: "اقدامات ایجنت، تغییر فایل‌ها و خروجی‌های دستورات به صورت زنده در این کادر نمایش داده می‌شوند."
       },
 
       en: {
@@ -1349,7 +1364,9 @@
         no_conversations_yet: "-- No active conversations yet --",
         new_conversation_btn: "New Chat +",
         no_conversation_active_hint: "No active conversation selected in OpenHands",
-        no_conversation_active_subhint: "Type a prompt below and send it, or click 'New Chat' to start a session."
+        no_conversation_active_subhint: "Type a prompt below and send it, or click 'New Chat' to start a session.",
+        agent_thinking_indicator: "Agent is thinking and executing tasks...",
+        agent_thinking_subindicator: "Real-time tool actions, file changes, and outputs will appear here as they happen."
       }
     };
 
@@ -1389,6 +1406,7 @@
         isSendingChat: false,
         isInterrupting: false,
         chatInput: '',
+        isAgentThinking: false,
         consolePollTimer: null,
         selectedRepo: 'ali-ahadi1105/notion-test',
         pipelineData: {},
@@ -1841,18 +1859,24 @@
 
         async fetchEvents(convId, silent = false) {
           if (!convId) return;
-          if (!silent) this.isEventsLoading = true;
+          if (!silent && this.conversationEvents.length === 0) this.isEventsLoading = true;
           try {
             const res = await fetch(`/api/openhands/conversations/${convId}/events?limit=100`);
             const data = await res.json();
             if (res.ok) {
-              this.conversationEvents = data.events || [];
+              const serverEvents = data.events || [];
+              // Preserve any optimistic user messages that aren't yet in server events
+              const pendingUserMessages = this.conversationEvents.filter(e => e.is_temp && !serverEvents.some(se => se.content === e.content));
+              this.conversationEvents = [...serverEvents, ...pendingUserMessages];
               if (data.status) {
                 if (this.activeConversation) this.activeConversation.status = data.status;
+                if (data.status !== 'running') {
+                  this.isAgentThinking = false;
+                }
               }
               this.$nextTick(() => {
                 const container = document.getElementById('consoleEventsContainer');
-                if (container && !silent) {
+                if (container && (!silent || this.isAgentThinking)) {
                   container.scrollTop = container.scrollHeight;
                 }
                 lucide.createIcons();
@@ -1894,26 +1918,54 @@
 
         async sendChatMessage() {
           if (!this.chatInput.trim()) return;
-          this.isSendingChat = true;
           const msg = this.chatInput.trim();
           this.chatInput = '';
+          this.isSendingChat = true;
+
+          // 1. Optimistic UI: Immediately render user's message into the stream!
+          const tempUserEvt = {
+            id: 'temp-' + Date.now(),
+            timestamp: new Date().toISOString(),
+            type: 'user_message',
+            title: this.currentLang === 'fa' ? 'پیام شما (کاربر)' : 'Your Message',
+            content: msg,
+            thought: '',
+            is_temp: true
+          };
+          this.conversationEvents.push(tempUserEvt);
+          this.isAgentThinking = true;
+
+          // Scroll immediately to bottom
+          this.$nextTick(() => {
+            const container = document.getElementById('consoleEventsContainer');
+            if (container) container.scrollTop = container.scrollHeight;
+          });
+
           try {
             if (!this.activeConversationId) {
               await this.startNewConversation(msg);
               return;
             }
 
+            // If conversation status was 'finished', set it to 'running'
+            if (this.activeConversation) {
+              this.activeConversation.status = 'running';
+            }
+
             const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: msg })
+              body: JSON.stringify({ message: msg, run: true })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Failed to send message');
             this.showToast(this.currentLang === 'fa' ? 'پیام به ایجنت ارسال شد' : 'Message sent to agent', 'success', 'send');
-            await this.fetchEvents(this.activeConversationId);
+            
+            // Poll events silently in background
+            this.fetchEvents(this.activeConversationId, true);
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');
+            this.isAgentThinking = false;
           } finally {
             this.isSendingChat = false;
           }

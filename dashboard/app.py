@@ -246,9 +246,10 @@ def openhands_request(
     path: str,
     body: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
-    timeout: float = 8.0
+    timeout: float = 6.0
 ) -> Any:
     mode, base_url, api_key = get_openhands_client_config()
+    req_timeout = 3.5 if method == "GET" and timeout > 3.5 else timeout
 
     candidate_urls = [base_url]
     if "127.0.0.1:8000" in base_url:
@@ -281,7 +282,7 @@ def openhands_request(
         url = f"{cand_base.rstrip('/')}{path}{query}"
         req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=req_timeout) as resp:
                 content = resp.read().decode("utf-8")
                 if not content:
                     return {}
@@ -414,17 +415,18 @@ def parse_openhands_event(raw_ev: dict[str, Any]) -> dict[str, Any] | None:
         }
 
     # 4. Message Event (User or Agent chat message)
-    if kind == "MessageEvent":
+    if kind == "MessageEvent" or raw_ev.get("type") in ("message", "user_message", "agent_message") or ("role" in raw_ev and "content" in raw_ev):
         role = llm_msg.get("role") or raw_ev.get("role") or raw_ev.get("source", "user")
         raw_content = llm_msg.get("content") or raw_ev.get("content") or ""
         content_text = extract_text_content(raw_content).strip()
+        is_user = (role in ("user", "human") or raw_ev.get("type") == "user_message" or raw_ev.get("source") == "user")
         return {
             "id": eid,
             "timestamp": ts,
-            "kind": kind,
-            "type": "agent_message" if role == "assistant" else "user_message",
+            "kind": kind or "MessageEvent",
+            "type": "user_message" if is_user else "agent_message",
             "source": role,
-            "title": "پاسخ ایجنت" if role == "assistant" else "پیام کاربر / ناظر سیستم",
+            "title": "پیام شما (کاربر)" if is_user else "پاسخ ایجنت",
             "thought": thought_text,
             "content": content_text,
             "tool_name": "",
@@ -1314,6 +1316,7 @@ def get_openhands_events(conversation_id: str, limit: int = 100):
     for ep in [
         f"/api/conversations/{conversation_id}/events/search",
         f"/api/v1/app-conversations/{conversation_id}/events/search",
+        f"/api/v1/conversation/{conversation_id}/events/search",
         f"/api/conversations/{conversation_id}/events",
         f"/api/v1/app-conversations/{conversation_id}/events",
     ]:
@@ -1321,7 +1324,8 @@ def get_openhands_events(conversation_id: str, limit: int = 100):
             res = openhands_request(
                 "GET",
                 ep,
-                params={"limit": limit, "sort_order": "TIMESTAMP_DESC"}
+                params={"limit": limit, "sort_order": "TIMESTAMP_DESC"},
+                timeout=3.0
             )
             if res is not None:
                 break
@@ -1345,12 +1349,9 @@ def get_openhands_events(conversation_id: str, limit: int = 100):
         if p:
             parsed_events.append(p)
 
-    status = "unknown"
-    try:
-        conv_info = get_openhands_conversation(conversation_id)
-        status = conv_info.get("status", "unknown")
-    except Exception:
-        pass
+    status = "running"
+    if isinstance(res, dict) and res.get("status"):
+        status = res.get("status")
 
     return {
         "conversation_id": conversation_id,
@@ -1374,6 +1375,7 @@ def send_openhands_chat(conversation_id: str, req: AgentChatRequest):
     for ep in [
         f"/api/conversations/{conversation_id}/events",
         f"/api/v1/app-conversations/{conversation_id}/events",
+        f"/api/v1/app-conversations/{conversation_id}/send-message",
     ]:
         try:
             res = openhands_request("POST", ep, body=payload)
@@ -1383,6 +1385,21 @@ def send_openhands_chat(conversation_id: str, req: AgentChatRequest):
             if he.status_code in (404, 405):
                 continue
             raise
+        except Exception:
+            continue
+
+    # Crucial: If conversation was paused or finished, trigger resume / run loop!
+    if req.run:
+        for run_ep in [
+            f"/api/conversations/{conversation_id}/run",
+            f"/api/v1/app-conversations/{conversation_id}/run",
+        ]:
+            try:
+                openhands_request("POST", run_ep, body={})
+                break
+            except Exception:
+                pass
+
     return {"status": "sent", "response": res}
 
 
