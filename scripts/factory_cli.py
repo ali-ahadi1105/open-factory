@@ -499,7 +499,7 @@ def launch_openhands_engine() -> bool:
     if shutil.which("agent-canvas"):
         cmd = ["agent-canvas"]
     elif shutil.which("npx"):
-        cmd = ["npx", "@openhands/agent-canvas"]
+        cmd = ["npx", "--yes", "@openhands/agent-canvas"]
     else:
         print(f"  {RED}✗{RESET} Cannot launch OpenHands: neither 'agent-canvas' nor 'npx' is installed.")
         return False
@@ -513,6 +513,7 @@ def launch_openhands_engine() -> bool:
     oh_log_file = open(LOGS_DIR / "openhands.log", "a")
     proc = subprocess.Popen(
         cmd,
+        stdin=subprocess.DEVNULL,
         stdout=oh_log_file,
         stderr=subprocess.STDOUT,
         preexec_fn=os.setpgrp,
@@ -577,6 +578,7 @@ def launch_dashboard(port: int = 8080) -> bool:
         cmd,
         cwd=str(REPO_ROOT),
         env=dash_env,
+        stdin=subprocess.DEVNULL,
         stdout=dash_log_file,
         stderr=subprocess.STDOUT,
         preexec_fn=os.setpgrp,
