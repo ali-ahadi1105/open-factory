@@ -461,6 +461,12 @@ class OpenHandsConfigUpdate(BaseModel):
     cloud_api_key: str | None = None
 
 
+class OpenHandsConversationCreate(BaseModel):
+    initial_message: str | None = None
+    repository: str | None = None
+    title: str | None = None
+
+
 class AgentChatRequest(BaseModel):
     message: str = Field(..., description="Message/prompt/hint to send to the agent")
     run: bool = Field(True, description="Whether to resume agent execution if stopped")
@@ -1147,6 +1153,34 @@ def list_openhands_conversations(limit: int = 25):
         return {"conversations": conversations}
     except Exception as exc:
         return {"conversations": [], "warning": str(exc), "connected": False}
+
+
+@app.post("/api/openhands/conversations")
+def create_openhands_conversation(req: OpenHandsConversationCreate):
+    payload = {}
+    if req.repository:
+        payload["selected_repository"] = req.repository
+    if req.title:
+        payload["title"] = req.title
+    if req.initial_message:
+        payload["initial_message"] = req.initial_message
+
+    res = openhands_request("POST", "/api/conversations", body=payload)
+    conv_id = res.get("id") or res.get("conversation_id")
+
+    # If an initial message was supplied, post event
+    if conv_id and req.initial_message and not res.get("events"):
+        try:
+            event_payload = {
+                "role": "user",
+                "content": [{"type": "text", "text": req.initial_message}],
+                "run": True,
+            }
+            openhands_request("POST", f"/api/conversations/{conv_id}/events", body=event_payload)
+        except Exception:
+            pass
+
+    return res
 
 
 @app.get("/api/openhands/conversations/{conversation_id}")

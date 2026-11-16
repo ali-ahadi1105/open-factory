@@ -916,10 +916,24 @@
           <span class="text-slate-500 dark:text-slate-400 shrink-0 font-medium" x-text="t('active_conversation_label')"></span>
           <select x-model="activeConversationId" @change="selectConversation(activeConversationId)"
                   class="bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-lg px-2.5 py-1 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-brand-500 max-w-md w-full shadow-sm">
+            <template x-if="openhandsConversations.length === 0">
+              <option value="" x-text="t('no_conversations_yet')"></option>
+            </template>
             <template x-for="conv in openhandsConversations" :key="conv.id">
               <option :value="conv.id" x-text="conv.title + ' (' + conv.status + ')'" :selected="conv.id === activeConversationId"></option>
             </template>
           </select>
+
+          <!-- New Conversation Button -->
+          <button type="button" @click="startNewConversation()"
+                  class="px-2.5 py-1 rounded-lg bg-brand-600/10 hover:bg-brand-600 border border-brand-500/30 text-brand-600 dark:text-brand-400 hover:text-white font-medium text-xs flex items-center gap-1 transition shrink-0"
+                  :title="t('new_conversation_btn')">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span x-text="t('new_conversation_btn')"></span>
+          </button>
         </div>
         <span class="font-mono text-[10px] text-slate-400 dark:text-slate-500" x-text="activeConversationId"></span>
       </div>
@@ -934,12 +948,13 @@
         </template>
 
         <template x-if="conversationEvents.length === 0 && !isEventsLoading">
-          <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-400">
-            <svg class="w-8 h-8 text-slate-400 dark:text-slate-600" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
+          <div class="flex flex-col items-center justify-center h-full gap-2 text-slate-400 text-center px-6">
+            <svg class="w-10 h-10 text-slate-400 dark:text-slate-600 mb-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
               <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
               <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
             </svg>
-            <span class="text-xs" x-text="t('console_empty')"></span>
+            <p class="text-xs font-semibold text-slate-600 dark:text-slate-300" x-text="!activeConversationId ? t('no_conversation_active_hint') : t('console_empty')"></p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 max-w-sm mt-0.5" x-text="!activeConversationId ? t('no_conversation_active_subhint') : ''"></p>
           </div>
         </template>
 
@@ -1081,7 +1096,7 @@
                    class="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl py-2.5 px-4 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-brand-500 shadow-sm">
           </div>
           
-          <button type="button" @click="sendChatMessage()" :disabled="isSendingChat || !chatInput.trim() || !activeConversationId"
+          <button type="button" @click="sendChatMessage()" :disabled="isSendingChat || !chatInput.trim()"
                   class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 transition shadow-lg shadow-indigo-600/20 shrink-0">
             <svg x-show="!isSendingChat" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24">
               <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -1211,7 +1226,11 @@
         pill_prompt_4: "وضعیت اجرای فعلی چیست و در چه مرحله‌ای هستی؟",
         console_chat_placeholder: "پیام یا دستور مداخله برای ایجنت بنویسید (مثلاً: تست فلان کامپوننت را موقتا کامنت کن)...",
         console_send_btn: "ارسال پیام",
-        sending_msg: "در حال ارسال..."
+        sending_msg: "در حال ارسال...",
+        no_conversations_yet: "-- هنوز گفتگویی آغاز نشده است --",
+        new_conversation_btn: "گفتگوی جدید +",
+        no_conversation_active_hint: "هنوز هیچ گفتگوی فعالی در OpenHands انتخاب نشده است",
+        no_conversation_active_subhint: "پیامی در کادر پایین بنویسید و ارسال کنید، یا روی «گفتگوی جدید» کلیک کنید تا ارتباط با ایجنت برقرار شود."
       },
 
       en: {
@@ -1326,7 +1345,11 @@
         pill_prompt_4: "What is your current execution status and what step are you on?",
         console_chat_placeholder: "Type guidance or instructions for the agent (e.g. mock DB in test)...",
         console_send_btn: "Send Message",
-        sending_msg: "Sending..."
+        sending_msg: "Sending...",
+        no_conversations_yet: "-- No active conversations yet --",
+        new_conversation_btn: "New Chat +",
+        no_conversation_active_hint: "No active conversation selected in OpenHands",
+        no_conversation_active_subhint: "Type a prompt below and send it, or click 'New Chat' to start a session."
       }
     };
 
@@ -1831,12 +1854,44 @@
           }
         },
 
+        async startNewConversation(initialMsg = null) {
+          try {
+            const title = initialMsg ? initialMsg.slice(0, 30) : (this.currentLang === 'fa' ? 'گفتگوی سفارشی' : 'Interactive Session');
+            const res = await fetch('/api/openhands/conversations', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                initial_message: initialMsg,
+                repository: this.selectedRepo || null,
+                title: title
+              })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Failed to start conversation');
+            const newId = data.id || data.conversation_id;
+            await this.fetchConversationsList();
+            if (newId) {
+              await this.selectConversation(newId);
+              this.showToast(this.currentLang === 'fa' ? 'گفتگوی جدید با ایجنت آغاز شد' : 'New agent conversation started', 'success', 'sparkles');
+            }
+            return newId;
+          } catch (e) {
+            this.showToast(e.message, 'error', 'alert-triangle');
+            return null;
+          }
+        },
+
         async sendChatMessage() {
-          if (!this.chatInput.trim() || !this.activeConversationId) return;
+          if (!this.chatInput.trim()) return;
           this.isSendingChat = true;
           const msg = this.chatInput.trim();
           this.chatInput = '';
           try {
+            if (!this.activeConversationId) {
+              await this.startNewConversation(msg);
+              return;
+            }
+
             const res = await fetch(`/api/openhands/conversations/${this.activeConversationId}/chat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
