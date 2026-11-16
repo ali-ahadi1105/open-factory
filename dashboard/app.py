@@ -203,6 +203,15 @@ def load_openhands_config() -> dict[str, Any]:
             data["local"] = default_cfg["local"]
         if "cloud" not in data:
             data["cloud"] = default_cfg["cloud"]
+        env_mode = os.environ.get("OPENHANDS_MODE")
+        if env_mode in ("local", "cloud"):
+            data["mode"] = env_mode
+        cloud_key = os.environ.get("OPENHANDS_CLOUD_API_KEY")
+        if cloud_key:
+            data["cloud"]["api_key"] = cloud_key.strip()
+        cloud_url = os.environ.get("OPENHANDS_CLOUD_BASE_URL")
+        if cloud_url:
+            data["cloud"]["base_url"] = cloud_url.rstrip("/")
         env_key = os.environ.get("OPENHANDS_API_KEY") or os.environ.get("LOCAL_BACKEND_API_KEY")
         if env_key:
             data["local"]["api_key"] = env_key.strip()

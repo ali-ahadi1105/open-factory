@@ -476,25 +476,31 @@ def check_openhands_health(base_url: str = "http://127.0.0.1:8000") -> bool:
 
 def get_openhands_config() -> dict:
     cfg_file = DASHBOARD_DIR / "openhands_config.json"
+    data = None
     if cfg_file.exists():
         try:
-            return json.loads(cfg_file.read_text(encoding="utf-8"))
+            data = json.loads(cfg_file.read_text(encoding="utf-8"))
         except Exception:
-            pass
-    # Default config
-    default_cfg = {
-        "mode": "local",
-        "local": {
-            "base_url": "http://127.0.0.1:8000",
-            "api_key": ""
-        },
-        "cloud": {
-            "base_url": "https://app.all-hands.dev",
-            "api_key": ""
+            data = None
+    if not data or not isinstance(data, dict):
+        data = {
+            "mode": "local",
+            "local": {
+                "base_url": "http://127.0.0.1:8000",
+                "api_key": ""
+            },
+            "cloud": {
+                "base_url": "https://app.all-hands.dev",
+                "api_key": ""
+            }
         }
-    }
-    cfg_file.write_text(json.dumps(default_cfg, indent=2), encoding="utf-8")
-    return default_cfg
+    env_mode = os.environ.get("OPENHANDS_MODE")
+    if env_mode in ("local", "cloud"):
+        data["mode"] = env_mode
+    cloud_key = os.environ.get("OPENHANDS_CLOUD_API_KEY")
+    if cloud_key:
+        data.setdefault("cloud", {})["api_key"] = cloud_key.strip()
+    return data
 
 
 def launch_openhands_engine() -> bool:
