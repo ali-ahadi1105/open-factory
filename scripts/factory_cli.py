@@ -87,6 +87,21 @@ def ensure_dirs():
     OPENHANDS_INSTALLED_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def find_uv_cmd() -> str | None:
+    path = shutil.which("uv")
+    if path:
+        return path
+    for candidate in [
+        Path.home() / ".local" / "bin" / "uv",
+        Path.home() / ".cargo" / "bin" / "uv",
+        Path("/root/.local/bin/uv"),
+        Path("/usr/local/bin/uv"),
+    ]:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Preflight checks
 # ---------------------------------------------------------------------------
@@ -103,7 +118,7 @@ def run_preflight_checks() -> dict[str, bool]:
         print(f"  {RED}✗{RESET} Python >= 3.10 required (found {sys.version.split()[0]})")
 
     # uv package manager
-    uv_path = shutil.which("uv")
+    uv_path = find_uv_cmd()
     results["uv"] = bool(uv_path)
     if uv_path:
         print(f"  {GREEN}✓{RESET} uv package manager ({uv_path})")
@@ -537,20 +552,21 @@ def launch_dashboard(port: int = 8080) -> bool:
         print(f"  {GREEN}✓{RESET} Dashboard is already running on http://127.0.0.1:{port}")
         return True
 
-    uv_cmd = shutil.which("uv")
+    uv_cmd = find_uv_cmd()
     cmd = []
     if uv_cmd:
-        cmd = ["uv", "run", "--with", "fastapi", "--with", "uvicorn", "python3", "dashboard/app.py"]
+        cmd = [uv_cmd, "run", "--with", "fastapi", "--with", "uvicorn", "python3", "dashboard/app.py"]
     else:
         try:
             import fastapi, uvicorn
         except ImportError:
             print(f"  {CYAN}▶{RESET} Installing required dependencies (fastapi, uvicorn)...")
             req_file = REPO_ROOT / "requirements.txt"
-            if req_file.exists():
-                subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(req_file)], check=False)
-            else:
-                subprocess.run([sys.executable, "-m", "pip", "install", "-q", "fastapi", "uvicorn"], check=False)
+            pip_cmd = [sys.executable, "-m", "pip", "install", "-q"]
+            target = ["-r", str(req_file)] if req_file.exists() else ["fastapi", "uvicorn"]
+            res = subprocess.run(pip_cmd + target, capture_output=True)
+            if res.returncode != 0:
+                subprocess.run(pip_cmd + ["--break-system-packages"] + target, check=False)
         cmd = [sys.executable, "dashboard/app.py"]
 
     print(f"  {CYAN}▶{RESET} Starting Dashboard server on port {port} in background...")
