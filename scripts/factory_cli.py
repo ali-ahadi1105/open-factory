@@ -576,6 +576,9 @@ def launch_dashboard(port: int = 8080) -> bool:
         print(f"  {GREEN}✓{RESET} Dashboard is already running on http://127.0.0.1:{port}")
         return True
 
+    # Free port if held by a stale or crashed process
+    free_ports(port)
+
     uv_cmd = find_uv_cmd()
     cmd = []
     if uv_cmd:

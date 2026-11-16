@@ -120,5 +120,13 @@ class TestOpenHandsIntegration(unittest.TestCase):
         self.assertEqual(reset_cfg["mode"], "local")
 
 
+    def test_list_openhands_conversations_graceful_fallback(self):
+        from app import list_openhands_conversations
+        # Unreachable OpenHands should return graceful fallback dictionary without 502 crash
+        res = list_openhands_conversations(limit=5)
+        self.assertIn("conversations", res)
+        self.assertIsInstance(res["conversations"], list)
+
+
 if __name__ == "__main__":
     unittest.main()

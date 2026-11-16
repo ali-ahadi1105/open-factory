@@ -203,7 +203,10 @@ def load_openhands_config() -> dict[str, Any]:
             data["local"] = default_cfg["local"]
         if "cloud" not in data:
             data["cloud"] = default_cfg["cloud"]
-        if not data["local"].get("api_key"):
+        env_key = os.environ.get("OPENHANDS_API_KEY") or os.environ.get("LOCAL_BACKEND_API_KEY")
+        if env_key:
+            data["local"]["api_key"] = env_key.strip()
+        elif not data["local"].get("api_key"):
             data["local"]["api_key"] = get_default_local_key()
         return data
     except Exception:
@@ -234,14 +237,23 @@ def openhands_request(
     path: str,
     body: dict[str, Any] | None = None,
     params: dict[str, Any] | None = None,
-    timeout: float = 12.0
+    timeout: float = 8.0
 ) -> Any:
     mode, base_url, api_key = get_openhands_client_config()
-    url = f"{base_url}{path}"
+
+    candidate_urls = [base_url]
+    if "127.0.0.1:8000" in base_url:
+        candidate_urls.append(base_url.replace("127.0.0.1:8000", "localhost:8000"))
+        candidate_urls.append(base_url.replace("127.0.0.1:8000", "127.0.0.1:18000"))
+    elif "localhost:8000" in base_url:
+        candidate_urls.append(base_url.replace("localhost:8000", "127.0.0.1:8000"))
+        candidate_urls.append(base_url.replace("localhost:8000", "localhost:18000"))
+
+    query = ""
     if params:
         query = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})
         if query:
-            url = f"{url}?{query}"
+            query = f"?{query}"
 
     headers = {
         "Accept": "application/json",
@@ -255,23 +267,29 @@ def openhands_request(
         headers["Content-Type"] = "application/json"
         data_bytes = json.dumps(body).encode("utf-8")
 
-    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            content = resp.read().decode("utf-8")
-            if not content:
-                return {}
-            return json.loads(content)
-    except urllib.error.HTTPError as err:
-        err_body = err.read().decode("utf-8", errors="replace")
+    last_exc = None
+    for cand_base in candidate_urls:
+        url = f"{cand_base.rstrip('/')}{path}{query}"
+        req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
         try:
-            err_json = json.loads(err_body)
-            detail = err_json.get("detail", err_json.get("message", err_body))
-        except Exception:
-            detail = err_body
-        raise HTTPException(status_code=err.code, detail=f"OpenHands API Error ({err.code}): {detail}")
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Cannot connect to OpenHands ({mode} at {base_url}): {exc}")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                content = resp.read().decode("utf-8")
+                if not content:
+                    return {}
+                return json.loads(content)
+        except urllib.error.HTTPError as err:
+            err_body = err.read().decode("utf-8", errors="replace")
+            try:
+                err_json = json.loads(err_body)
+                detail = err_json.get("detail", err_json.get("message", err_body))
+            except Exception:
+                detail = err_body
+            raise HTTPException(status_code=err.code, detail=f"OpenHands API Error ({err.code}): {detail}")
+        except Exception as exc:
+            last_exc = exc
+            continue
+
+    raise HTTPException(status_code=502, detail=f"Cannot connect to OpenHands ({mode} at {base_url}): {last_exc}")
 
 
 def extract_text_content(content_obj: Any) -> str:
@@ -919,6 +937,7 @@ def launch_project(req: LaunchRequest):
 
 
 @app.get("/api/projects/{owner}/{repo}/pipeline")
+@app.get("/api/pipeline/{owner}/{repo}")
 def get_project_pipeline(owner: str, repo: str):
     full_repo = f"{owner}/{repo}"
     client = get_client()
@@ -1034,6 +1053,7 @@ def get_project_pipeline(owner: str, repo: str):
 
 
 @app.post("/api/projects/{owner}/{repo}/orchestrate")
+@app.post("/api/pipeline/{owner}/{repo}/orchestrate")
 def run_orchestrator(owner: str, repo: str):
     full_repo = f"{owner}/{repo}"
     client = get_client()
@@ -1045,6 +1065,7 @@ def run_orchestrator(owner: str, repo: str):
 
 
 @app.post("/api/projects/{owner}/{repo}/heal")
+@app.post("/api/pipeline/{owner}/{repo}/heal")
 def run_healer(owner: str, repo: str):
     full_repo = f"{owner}/{repo}"
     client = get_client()
@@ -1097,7 +1118,13 @@ def update_openhands_config(req: OpenHandsConfigUpdate):
 @app.get("/api/openhands/conversations")
 def list_openhands_conversations(limit: int = 25):
     try:
-        res = openhands_request("GET", "/api/conversations/search", params={"limit": limit, "sort_order": "CREATED_AT_DESC"})
+        try:
+            res = openhands_request("GET", "/api/conversations/search", params={"limit": limit, "sort_order": "CREATED_AT_DESC"})
+        except HTTPException as he:
+            if he.status_code == 404:
+                res = openhands_request("GET", "/api/conversations", params={"limit": limit})
+            else:
+                raise
         items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
         conversations = []
         for c in items:
@@ -1109,10 +1136,8 @@ def list_openhands_conversations(limit: int = 25):
                 "selected_repository": c.get("selected_repository"),
             })
         return {"conversations": conversations}
-    except HTTPException:
-        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        return {"conversations": [], "warning": str(exc), "connected": False}
 
 
 @app.get("/api/openhands/conversations/{conversation_id}")
