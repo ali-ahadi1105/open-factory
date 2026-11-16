@@ -1894,7 +1894,8 @@
           if (this.engineConfig?.mode === 'cloud') {
             return `https://app.all-hands.dev/conversation/${id}`;
           }
-          return `http://127.0.0.1:8000/conversation/${id}`;
+          const host = window.location.hostname || '127.0.0.1';
+          return `http://${host}:8000/conversation/${id}`;
         },
 
         formatTimestamp(ts) {
