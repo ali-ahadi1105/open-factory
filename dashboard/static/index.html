@@ -1637,14 +1637,25 @@
         async testEngineConnection() {
           this.isTestingEngine = true;
           try {
-            const targetUrl = this.engineForm.mode === 'cloud' ? this.engineForm.cloud_base_url : this.engineForm.local_base_url;
-            const res = await fetch('/api/openhands/conversations?limit=1');
+            const mode = this.engineForm.mode;
+            const targetUrl = mode === 'cloud' ? this.engineForm.cloud_base_url : this.engineForm.local_base_url;
+            const targetKey = mode === 'cloud' ? this.engineForm.cloud_api_key : this.engineForm.local_api_key;
+            
+            const res = await fetch('/api/openhands/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: mode,
+                base_url: targetUrl,
+                api_key: targetKey
+              })
+            });
             const data = await res.json();
-            if (!res.ok || data.status === 'error') {
-              const msg = data.message || data.detail || (this.currentLang === 'fa' ? 'امکان برقراری ارتباط با موتور هوش مصنوعی وجود ندارد' : 'Connection failed');
-              this.showToast(this.currentLang === 'fa' ? `اتصال ناموفق بود: ${msg}` : `Connection failed: ${msg}`, 'error', 'alert-circle');
-            } else {
+            if (data.status === 'ok') {
               this.showToast(this.currentLang === 'fa' ? `اتصال موفق به ${targetUrl}` : `Successfully connected to ${targetUrl}`, 'success', 'check-circle');
+            } else {
+              const msg = data.detail || (this.currentLang === 'fa' ? 'امکان برقراری ارتباط با موتور هوش مصنوعی وجود ندارد' : 'Connection failed');
+              this.showToast(this.currentLang === 'fa' ? `اتصال ناموفق: ${msg}` : `Connection failed: ${msg}`, 'error', 'alert-circle');
             }
           } catch (e) {
             this.showToast(e.message, 'error', 'alert-triangle');

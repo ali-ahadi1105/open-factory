@@ -128,5 +128,11 @@ class TestOpenHandsIntegration(unittest.TestCase):
         self.assertIsInstance(res["conversations"], list)
 
 
+    def test_test_openhands_connection_offline(self):
+        from app import test_openhands_connection, OpenHandsTestRequest
+        res = test_openhands_connection(OpenHandsTestRequest(base_url="http://127.0.0.1:59999"))
+        self.assertEqual(res["status"], "error")
+
+
 if __name__ == "__main__":
     unittest.main()

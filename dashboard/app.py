@@ -461,6 +461,12 @@ class OpenHandsConfigUpdate(BaseModel):
     cloud_api_key: str | None = None
 
 
+class OpenHandsTestRequest(BaseModel):
+    mode: str = "local"
+    base_url: str = "http://127.0.0.1:8000"
+    api_key: str = ""
+
+
 class OpenHandsConversationCreate(BaseModel):
     initial_message: str | None = None
     repository: str | None = None
@@ -1130,23 +1136,77 @@ def update_openhands_config(req: OpenHandsConfigUpdate):
     return get_openhands_config()
 
 
+@app.post("/api/openhands/test")
+def test_openhands_connection(req: OpenHandsTestRequest):
+    headers = {"Accept": "application/json"}
+    if req.api_key:
+        headers["X-Session-API-Key"] = req.api_key
+        headers["Authorization"] = f"Bearer {req.api_key}"
+
+    endpoints = [
+        "/api/v1/app-conversations/search?limit=1",
+        "/api/v1/app-conversations?limit=1",
+        "/api/conversations/search?limit=1",
+        "/api/conversations?limit=1",
+        "/alive",
+        "/",
+    ]
+    last_err = None
+    for ep in endpoints:
+        url = f"{req.base_url.rstrip('/')}{ep}"
+        try:
+            r = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(r, timeout=4.0) as resp:
+                return {"status": "ok", "url": req.base_url}
+        except urllib.error.HTTPError as he:
+            if he.code in (200, 204, 301, 302, 307, 404):
+                return {"status": "ok", "url": req.base_url}
+            if he.code in (401, 403):
+                return {"status": "error", "detail": f"Authentication failed (HTTP {he.code}): Please check your API key"}
+            last_err = f"HTTP {he.code}: {he.reason}"
+        except Exception as e:
+            last_err = str(e)
+    return {"status": "error", "detail": f"Cannot connect to {req.base_url}: {last_err}"}
+
+
 @app.get("/api/openhands/conversations")
 def list_openhands_conversations(limit: int = 25):
     try:
-        try:
-            res = openhands_request("GET", "/api/conversations/search", params={"limit": limit, "sort_order": "CREATED_AT_DESC"})
-        except HTTPException as he:
-            if he.status_code == 404:
-                res = openhands_request("GET", "/api/conversations", params={"limit": limit})
-            else:
+        res = None
+        endpoints = [
+            ("GET", "/api/v1/app-conversations/search", {"limit": limit, "sort_order": "CREATED_AT_DESC"}),
+            ("GET", "/api/v1/app-conversations", {"limit": limit}),
+            ("GET", "/api/conversations/search", {"limit": limit, "sort_order": "CREATED_AT_DESC"}),
+            ("GET", "/api/conversations", {"limit": limit}),
+        ]
+        for method, ep, params in endpoints:
+            try:
+                res = openhands_request(method, ep, params=params)
+                if res is not None:
+                    break
+            except HTTPException as he:
+                if he.status_code in (404, 405):
+                    continue
                 raise
-        items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+            except Exception:
+                continue
+
+        if isinstance(res, list):
+            items = res
+        elif isinstance(res, dict):
+            items = res.get("items") or res.get("conversations") or res.get("app_conversations") or []
+        else:
+            items = []
+
         conversations = []
         for c in items:
+            cid = c.get("id") or c.get("app_conversation_id") or c.get("conversation_id")
+            if not cid:
+                continue
             conversations.append({
-                "id": c.get("id"),
+                "id": cid,
                 "title": c.get("title") or "گفتگوی بدون عنوان",
-                "status": c.get("execution_status") or "unknown",
+                "status": c.get("execution_status") or c.get("status") or "running",
                 "created_at": c.get("created_at"),
                 "selected_repository": c.get("selected_repository"),
             })
@@ -1157,18 +1217,56 @@ def list_openhands_conversations(limit: int = 25):
 
 @app.post("/api/openhands/conversations")
 def create_openhands_conversation(req: OpenHandsConversationCreate):
-    payload = {}
+    # 1. Try V1 app-conversations endpoint first (OpenHands Cloud & modern OpenHands)
+    v1_body = {}
     if req.repository:
-        payload["selected_repository"] = req.repository
-    if req.title:
-        payload["title"] = req.title
+        v1_body["selected_repository"] = req.repository
     if req.initial_message:
-        payload["initial_message"] = req.initial_message
+        v1_body["initial_message"] = {
+            "content": [{"type": "text", "text": req.initial_message}]
+        }
+        v1_body["args"] = {"prompt": req.initial_message}
 
-    res = openhands_request("POST", "/api/conversations", body=payload)
-    conv_id = res.get("id") or res.get("conversation_id")
+    res = None
+    last_err = None
+    try:
+        res = openhands_request("POST", "/api/v1/app-conversations", body=v1_body)
+    except HTTPException as he:
+        if he.status_code in (404, 405):
+            # 2. Try legacy fallbacks
+            legacy_body = {}
+            if req.repository:
+                legacy_body["selected_repository"] = req.repository
+            if req.initial_message:
+                legacy_body["initial_message"] = req.initial_message
+            if req.title:
+                legacy_body["title"] = req.title
 
-    # If an initial message was supplied, post event
+            for ep in ["/api/conversations/init", "/api/conversations/new", "/api/conversations"]:
+                try:
+                    res = openhands_request("POST", ep, body=legacy_body)
+                    if res:
+                        break
+                except HTTPException as he2:
+                    if he2.status_code in (404, 405):
+                        continue
+                    last_err = he2
+                except Exception as e:
+                    last_err = e
+        else:
+            raise
+
+    if not res:
+        if last_err:
+            raise last_err
+        raise HTTPException(status_code=500, detail="OpenHands did not accept conversation initialization")
+
+    conv_id = res.get("app_conversation_id") or res.get("conversation_id") or res.get("id")
+    if conv_id:
+        res["id"] = conv_id
+        res["conversation_id"] = conv_id
+
+    # If an initial message was supplied and not auto-run, trigger event
     if conv_id and req.initial_message and not res.get("events"):
         try:
             event_payload = {
@@ -1185,11 +1283,23 @@ def create_openhands_conversation(req: OpenHandsConversationCreate):
 
 @app.get("/api/openhands/conversations/{conversation_id}")
 def get_openhands_conversation(conversation_id: str):
-    res = openhands_request("GET", f"/api/conversations/{conversation_id}")
+    res = None
+    for ep in [f"/api/v1/app-conversations/{conversation_id}", f"/api/conversations/{conversation_id}"]:
+        try:
+            res = openhands_request("GET", ep)
+            if res:
+                break
+        except HTTPException as he:
+            if he.status_code in (404, 405):
+                continue
+            raise
+    if not res:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    cid = res.get("id") or res.get("app_conversation_id") or conversation_id
     return {
-        "id": res.get("id"),
-        "title": res.get("title"),
-        "status": res.get("execution_status"),
+        "id": cid,
+        "title": res.get("title") or "گفتگو",
+        "status": res.get("execution_status") or res.get("status") or "running",
         "created_at": res.get("created_at"),
         "selected_repository": res.get("selected_repository"),
     }
@@ -1198,12 +1308,33 @@ def get_openhands_conversation(conversation_id: str):
 @app.get("/api/openhands/conversations/{conversation_id}/events")
 def get_openhands_events(conversation_id: str, limit: int = 100):
     # Fetch latest events in descending order, then reverse to display chronologically
-    res = openhands_request(
-        "GET",
+    res = None
+    for ep in [
         f"/api/conversations/{conversation_id}/events/search",
-        params={"limit": limit, "sort_order": "TIMESTAMP_DESC"}
-    )
-    raw_items = res.get("items", []) if isinstance(res, dict) else (res if isinstance(res, list) else [])
+        f"/api/v1/app-conversations/{conversation_id}/events/search",
+        f"/api/conversations/{conversation_id}/events",
+        f"/api/v1/app-conversations/{conversation_id}/events",
+    ]:
+        try:
+            res = openhands_request(
+                "GET",
+                ep,
+                params={"limit": limit, "sort_order": "TIMESTAMP_DESC"}
+            )
+            if res is not None:
+                break
+        except HTTPException as he:
+            if he.status_code in (404, 405):
+                continue
+            raise
+        except Exception:
+            continue
+
+    raw_items = []
+    if isinstance(res, dict):
+        raw_items = res.get("items") or res.get("events") or []
+    elif isinstance(res, list):
+        raw_items = res
     raw_items.reverse()
 
     parsed_events = []
@@ -1214,8 +1345,8 @@ def get_openhands_events(conversation_id: str, limit: int = 100):
 
     status = "unknown"
     try:
-        conv_info = openhands_request("GET", f"/api/conversations/{conversation_id}")
-        status = conv_info.get("execution_status", "unknown")
+        conv_info = get_openhands_conversation(conversation_id)
+        status = conv_info.get("status", "unknown")
     except Exception:
         pass
 
@@ -1237,19 +1368,55 @@ def send_openhands_chat(conversation_id: str, req: AgentChatRequest):
         "content": [{"type": "text", "text": req.message}],
         "run": req.run,
     }
-    res = openhands_request("POST", f"/api/conversations/{conversation_id}/events", body=payload)
+    res = None
+    for ep in [
+        f"/api/conversations/{conversation_id}/events",
+        f"/api/v1/app-conversations/{conversation_id}/events",
+    ]:
+        try:
+            res = openhands_request("POST", ep, body=payload)
+            if res is not None:
+                break
+        except HTTPException as he:
+            if he.status_code in (404, 405):
+                continue
+            raise
     return {"status": "sent", "response": res}
 
 
 @app.post("/api/openhands/conversations/{conversation_id}/interrupt")
 def interrupt_openhands_conversation(conversation_id: str):
-    res = openhands_request("POST", f"/api/conversations/{conversation_id}/interrupt", body={})
+    res = None
+    for ep in [
+        f"/api/conversations/{conversation_id}/interrupt",
+        f"/api/v1/app-conversations/{conversation_id}/interrupt",
+    ]:
+        try:
+            res = openhands_request("POST", ep, body={})
+            if res is not None:
+                break
+        except HTTPException as he:
+            if he.status_code in (404, 405):
+                continue
+            raise
     return {"status": "interrupted", "result": res}
 
 
 @app.post("/api/openhands/conversations/{conversation_id}/run")
 def resume_openhands_conversation(conversation_id: str):
-    res = openhands_request("POST", f"/api/conversations/{conversation_id}/run", body={})
+    res = None
+    for ep in [
+        f"/api/conversations/{conversation_id}/run",
+        f"/api/v1/app-conversations/{conversation_id}/run",
+    ]:
+        try:
+            res = openhands_request("POST", ep, body={})
+            if res is not None:
+                break
+        except HTTPException as he:
+            if he.status_code in (404, 405):
+                continue
+            raise
     return {"status": "resumed", "result": res}
 
 
