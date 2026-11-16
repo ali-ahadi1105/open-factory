@@ -573,6 +573,9 @@ def launch_dashboard(port: int = 8080) -> bool:
     print(f"  {CYAN}▶{RESET} Starting Dashboard server on port {port} in background...")
     dash_log_file = open(LOGS_DIR / "dashboard.log", "a")
     dash_env = os.environ.copy()
+    local_bin = str(Path.home() / ".local" / "bin")
+    if local_bin not in dash_env.get("PATH", ""):
+        dash_env["PATH"] = f"{local_bin}:{dash_env.get('PATH', '')}"
     dash_env["PORT"] = str(port)
     proc = subprocess.Popen(
         cmd,
