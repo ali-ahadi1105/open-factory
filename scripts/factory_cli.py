@@ -567,13 +567,17 @@ def launch_openhands_engine() -> bool:
 # Dashboard Server Management
 # ---------------------------------------------------------------------------
 def check_dashboard_health(port: int = 8080) -> bool:
-    try:
-        url = f"http://127.0.0.1:{port}/api/projects"
-        req = urllib.request.Request(url, headers={"User-Agent": "OpenFactory-CLI"})
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
+    endpoints = ["/api/system/status", "/", "/api/projects"]
+    for ep in endpoints:
+        try:
+            url = f"http://127.0.0.1:{port}{ep}"
+            req = urllib.request.Request(url, headers={"User-Agent": "OpenFactory-CLI"})
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                if resp.status == 200:
+                    return True
+        except Exception:
+            continue
+    return False
 
 
 def launch_dashboard(port: int = 8080) -> bool:
