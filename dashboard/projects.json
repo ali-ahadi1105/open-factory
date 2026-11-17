@@ -1,5 +1,11 @@
 [
   {
+    "repo": "ali-ahadi1105/nextjs-saas",
+    "name": "nextjs-saas",
+    "description": "Autonomous Software Factory project created via Dashboard",
+    "created_at": "2026-11-17T07:17:00Z"
+  },
+  {
     "repo": "ali-ahadi1105/notion-test",
     "name": "notion-test",
     "description": "Notion Clone (Next.js) - Phase 1 to Phase 4",
