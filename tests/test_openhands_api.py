@@ -120,6 +120,19 @@ class TestOpenHandsIntegration(unittest.TestCase):
         self.assertEqual(reset_cfg["mode"], "local")
 
 
+    def test_update_openhands_config_nested(self):
+        req = OpenHandsConfigUpdate(
+            mode="cloud",
+            cloud={"base_url": "https://app.all-hands.dev", "api_key": "nested_cloud_key_999"},
+        )
+        updated = update_openhands_config(req)
+        self.assertEqual(updated["mode"], "cloud")
+        self.assertTrue(updated["cloud"]["has_key"])
+
+        # Reset back to local
+        update_openhands_config(OpenHandsConfigUpdate(mode="local"))
+
+
     def test_list_openhands_conversations_graceful_fallback(self):
         from app import list_openhands_conversations
         # Unreachable OpenHands should return graceful fallback dictionary without 502 crash

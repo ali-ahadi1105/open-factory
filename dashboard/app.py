@@ -30,7 +30,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 # Ensure open-factory scripts are on sys.path
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+ROOT_DIR = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = ROOT_DIR / "scripts"
 DASHBOARD_DIR = Path(__file__).resolve().parent
 STATIC_DIR = DASHBOARD_DIR / "static"
 PROJECTS_FILE = DASHBOARD_DIR / "projects.json"
@@ -461,6 +462,8 @@ class OpenHandsConfigUpdate(BaseModel):
     local_api_key: str | None = None
     cloud_base_url: str | None = None
     cloud_api_key: str | None = None
+    local: dict[str, Any] | None = None
+    cloud: dict[str, Any] | None = None
 
 
 class OpenHandsTestRequest(BaseModel):
@@ -669,13 +672,28 @@ def get_system_status():
         if api_key:
             headers["X-Session-API-Key"] = api_key
             headers["Authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(f"{base_url}/server_info", headers=headers)
-        with urllib.request.urlopen(req, timeout=2.5) as resp:
-            data = json.loads(resp.read().decode())
-            status["openhands"]["connected"] = True
-            status["openhands"]["version"] = data.get("version") or data.get("sdk_version")
-            status["openhands"]["title"] = data.get("title")
-            status["openhands"]["usable_tools"] = data.get("usable_tools", [])
+
+        probe_endpoints = ["/server_info", "/api/v1/app-conversations?limit=1", "/alive", "/health"]
+        connected = False
+        last_exc = None
+        for ep in probe_endpoints:
+            try:
+                req = urllib.request.Request(f"{base_url}{ep}", headers=headers)
+                with urllib.request.urlopen(req, timeout=2.5) as resp:
+                    raw = resp.read().decode("utf-8")
+                    data = json.loads(raw) if raw else {}
+                    status["openhands"]["connected"] = True
+                    status["openhands"]["version"] = data.get("version") or data.get("sdk_version") or ("Cloud" if mode == "cloud" else "1.0.0")
+                    status["openhands"]["title"] = data.get("title") or ("OpenHands Cloud" if mode == "cloud" else "OpenHands Agent")
+                    status["openhands"]["usable_tools"] = data.get("usable_tools", [])
+                    connected = True
+                    break
+            except Exception as e:
+                last_exc = e
+                continue
+        if not connected:
+            status["openhands"]["connected"] = False
+            status["openhands"]["error"] = str(last_exc)
     except Exception as exc:
         status["openhands"]["connected"] = False
         status["openhands"]["error"] = str(exc)
@@ -1139,14 +1157,25 @@ def update_openhands_config(req: OpenHandsConfigUpdate):
     cfg = load_openhands_config()
     if req.mode in ("local", "cloud"):
         cfg["mode"] = req.mode
-    if req.local_base_url:
-        cfg["local"]["base_url"] = req.local_base_url.rstrip("/")
-    if req.local_api_key is not None:
-        cfg["local"]["api_key"] = req.local_api_key.strip()
-    if req.cloud_base_url:
-        cfg["cloud"]["base_url"] = req.cloud_base_url.rstrip("/")
-    if req.cloud_api_key is not None:
-        cfg["cloud"]["api_key"] = req.cloud_api_key.strip()
+
+    # Flat or nested local settings
+    local_url = req.local_base_url or (req.local.get("base_url") if req.local else None)
+    if local_url:
+        cfg["local"]["base_url"] = local_url.rstrip("/")
+
+    local_key = req.local_api_key if req.local_api_key is not None else (req.local.get("api_key") if req.local else None)
+    if local_key is not None and local_key.strip():
+        cfg["local"]["api_key"] = local_key.strip()
+
+    # Flat or nested cloud settings
+    cloud_url = req.cloud_base_url or (req.cloud.get("base_url") if req.cloud else None)
+    if cloud_url:
+        cfg["cloud"]["base_url"] = cloud_url.rstrip("/")
+
+    cloud_key = req.cloud_api_key if req.cloud_api_key is not None else (req.cloud.get("api_key") if req.cloud else None)
+    if cloud_key is not None and cloud_key.strip():
+        cfg["cloud"]["api_key"] = cloud_key.strip()
+
     save_openhands_config(cfg)
     return get_openhands_config()
 
@@ -1232,44 +1261,79 @@ def list_openhands_conversations(limit: int = 25):
 
 @app.post("/api/openhands/conversations")
 def create_openhands_conversation(req: OpenHandsConversationCreate):
-    # 1. Try V1 app-conversations endpoint first (OpenHands Cloud & modern OpenHands)
-    v1_body = {}
-    if req.repository:
-        v1_body["selected_repository"] = req.repository
-    if req.initial_message:
-        v1_body["initial_message"] = {
-            "content": [{"type": "text", "text": req.initial_message}]
-        }
-        v1_body["args"] = {"prompt": req.initial_message}
-
+    mode, base_url, api_key = get_openhands_client_config()
     res = None
     last_err = None
-    try:
-        res = openhands_request("POST", "/api/v1/app-conversations", body=v1_body)
-    except HTTPException as he:
-        if he.status_code in (404, 405):
-            # 2. Try legacy fallbacks
-            legacy_body = {}
-            if req.repository:
-                legacy_body["selected_repository"] = req.repository
-            if req.initial_message:
-                legacy_body["initial_message"] = req.initial_message
-            if req.title:
-                legacy_body["title"] = req.title
 
-            for ep in ["/api/conversations/init", "/api/conversations/new", "/api/conversations"]:
-                try:
-                    res = openhands_request("POST", ep, body=legacy_body)
-                    if res:
-                        break
-                except HTTPException as he2:
-                    if he2.status_code in (404, 405):
-                        continue
-                    last_err = he2
-                except Exception as e:
-                    last_err = e
-        else:
-            raise
+    if mode == "local":
+        # 1. Local OpenHands (agent-server / Agent Canvas)
+        workspace_dir = req.repository or str(ROOT_DIR)
+        active_prof_id = None
+        try:
+            settings_res = openhands_request("GET", "/api/settings", timeout=2.5)
+            active_prof_id = settings_res.get("active_agent_profile_id")
+        except Exception:
+            pass
+
+        if not active_prof_id:
+            try:
+                prof_res = openhands_request("GET", "/api/agent-profiles", timeout=2.5)
+                active_prof_id = prof_res.get("active_agent_profile_id")
+                if not active_prof_id and prof_res.get("profiles"):
+                    active_prof_id = prof_res["profiles"][0].get("id")
+            except Exception:
+                pass
+
+        local_body: dict[str, Any] = {
+            "workspace": {
+                "working_dir": workspace_dir
+            }
+        }
+        if active_prof_id:
+            local_body["agent_profile_id"] = active_prof_id
+
+        if req.initial_message:
+            local_body["initial_message"] = {
+                "role": "user",
+                "content": [{"type": "text", "text": req.initial_message}]
+            }
+
+        try:
+            res = openhands_request("POST", "/api/conversations", body=local_body)
+        except Exception as err:
+            last_err = err
+
+    if not res:
+        # 2. Cloud or V1 OpenHands app-conversations endpoint
+        v1_body: dict[str, Any] = {}
+        if req.repository:
+            v1_body["selected_repository"] = req.repository
+        if req.initial_message:
+            v1_body["initial_message"] = {
+                "content": [{"type": "text", "text": req.initial_message}]
+            }
+            v1_body["args"] = {"prompt": req.initial_message}
+
+        try:
+            res = openhands_request("POST", "/api/v1/app-conversations", body=v1_body)
+        except HTTPException as he:
+            last_err = he
+            if he.status_code in (404, 405):
+                legacy_body: dict[str, Any] = {}
+                if req.repository:
+                    legacy_body["selected_repository"] = req.repository
+                if req.initial_message:
+                    legacy_body["initial_message"] = req.initial_message
+                if req.title:
+                    legacy_body["title"] = req.title
+
+                for ep in ["/api/conversations/init", "/api/conversations/new", "/api/conversations"]:
+                    try:
+                        res = openhands_request("POST", ep, body=legacy_body)
+                        if res:
+                            break
+                    except Exception as e:
+                        last_err = e
 
     if not res:
         if last_err:
@@ -1282,7 +1346,7 @@ def create_openhands_conversation(req: OpenHandsConversationCreate):
         res["conversation_id"] = conv_id
 
     # If an initial message was supplied and not auto-run, trigger event
-    if conv_id and req.initial_message and not res.get("events"):
+    if conv_id and req.initial_message and not res.get("last_user_message_id") and not res.get("leaf_event_id"):
         try:
             event_payload = {
                 "role": "user",

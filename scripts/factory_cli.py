@@ -760,11 +760,19 @@ def main():
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to execute")
 
-    # 'up' / 'start'
+    # 'up' / 'start' / 'restart'
     default_port = int(os.environ.get("PORT", 8080))
     p_up = subparsers.add_parser("up", help="Bootstrap and start the complete Open Factory stack")
     p_up.add_argument("--no-browser", action="store_true", help="Do not automatically open the browser")
     p_up.add_argument("--port", type=int, default=default_port, help=f"Dashboard port (default: {default_port})")
+
+    p_start = subparsers.add_parser("start", help="Alias for 'up'")
+    p_start.add_argument("--no-browser", action="store_true", help="Do not automatically open the browser")
+    p_start.add_argument("--port", type=int, default=default_port, help=f"Dashboard port (default: {default_port})")
+
+    p_restart = subparsers.add_parser("restart", help="Restart all Open Factory stack services")
+    p_restart.add_argument("--no-browser", action="store_true", help="Do not automatically open the browser")
+    p_restart.add_argument("--port", type=int, default=default_port, help=f"Dashboard port (default: {default_port})")
 
     # 'down' / 'stop'
     subparsers.add_parser("down", help="Stop running Open Factory services")
@@ -816,6 +824,25 @@ def main():
 
     elif cmd in ("down", "stop"):
         stop_stack()
+
+    elif cmd == "restart":
+        stop_stack()
+        time.sleep(1)
+        print_banner()
+        run_preflight_checks()
+        setup_github_authentication(interactive=True)
+        sync_ali_factory_skill()
+        launch_openhands_engine()
+        port = getattr(args, "port", 8080)
+        launch_dashboard(port=port)
+
+        dashboard_url = f"http://localhost:{port}"
+        print(f"\n{GREEN}{BOLD}════════════════════════════════════════════════════════════════{RESET}")
+        print(f" {GREEN}{BOLD}🎉 Open Factory restarted successfully!{RESET}")
+        print(f"    • Dashboard:  {BOLD}{dashboard_url}{RESET}")
+        print(f"    • OpenHands:  {BOLD}http://localhost:8000{RESET}")
+        print(f"    • Skill:      {BOLD}ali-factory (injected into OpenHands){RESET}")
+        print(f"{GREEN}{BOLD}════════════════════════════════════════════════════════════════{RESET}\n")
 
     elif cmd == "status":
         print_status()
