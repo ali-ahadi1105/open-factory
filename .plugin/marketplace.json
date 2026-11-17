@@ -1,0 +1,36 @@
+{
+  "name": "ali-factory",
+  "owner": {
+    "name": "Ali Ahadi",
+    "email": "contact@all-hands.dev"
+  },
+  "metadata": {
+    "description": "Autonomous GitHub software factory with requirements planning, DAG phase orchestration, and PR auto-healing.",
+    "maintainer": "Ali Ahadi",
+    "homepage": "https://github.com/ali-ahadi1105/open-factory"
+  },
+  "plugins": [
+    {
+      "name": "ali-factory",
+      "source": "./",
+      "description": "Autonomous GitHub software factory with requirements planning, DAG phase orchestration, and PR auto-healing (CI / review feedback loop).",
+      "category": "software-development",
+      "defaultEnabled": true,
+      "keywords": [
+        "factory",
+        "software-factory",
+        "ali-factory",
+        "dag",
+        "orchestrator",
+        "healer"
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "ali-factory",
+      "source": "./SKILL.md",
+      "description": "Autonomous GitHub software factory with requirements planning, DAG phase orchestration, and PR auto-healing (CI / review feedback loop)."
+    }
+  ]
+}
