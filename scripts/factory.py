@@ -300,7 +300,14 @@ def _tarball(root: Path, files: dict, config: dict) -> bytes:
             ext_src = (root / repo_path).resolve()
             src = local_src if local_src.is_file() else ext_src
             if not src.is_file():
-                raise FactoryError(f"file not found for bundle: {repo_path}")
+                fallback_script = (LOCAL_ROOT / "scripts" / Path(repo_path).name).resolve()
+                fallback_user_skill = (Path.home() / ".openhands" / repo_path).resolve()
+                if fallback_script.is_file():
+                    src = fallback_script
+                elif fallback_user_skill.is_file():
+                    src = fallback_user_skill
+                else:
+                    raise FactoryError(f"file not found for bundle: {repo_path}")
             tar.add(str(src), arcname=archive_name)
         data = json.dumps(config, indent=2).encode()
         info = tarfile.TarInfo("config.json")

@@ -955,8 +955,36 @@ def launch_project(req: LaunchRequest):
     except Exception as plan_err:
         raise HTTPException(status_code=500, detail=f"Failed to publish issues to GitHub: {plan_err}")
 
-    # 4. Install orchestrator workflow into repository if requested
+    # 4. Install orchestrator workflow and ali-factory project skill into repository
     orchestrator_installed = False
+    skill_injected = False
+    try:
+        skill_file = ROOT_DIR / "SKILL.md"
+        if not skill_file.is_file():
+            skill_file = Path.home() / ".openhands" / "skills" / "ali-factory" / "SKILL.md"
+        if skill_file.is_file():
+            client.create_or_update_file(
+                repo=repo,
+                path=".openhands/skills/ali-factory/SKILL.md",
+                content=skill_file.read_text(encoding="utf-8"),
+                commit_message="feat: inject ali-factory project skill for OpenHands Cloud & Local",
+                branch="main",
+            )
+            skill_injected = True
+        readme_file = ROOT_DIR / "README.md"
+        if not readme_file.is_file():
+            readme_file = Path.home() / ".openhands" / "skills" / "ali-factory" / "README.md"
+        if readme_file.is_file():
+            client.create_or_update_file(
+                repo=repo,
+                path=".openhands/skills/ali-factory/README.md",
+                content=readme_file.read_text(encoding="utf-8"),
+                commit_message="docs: add ali-factory skill documentation to repository",
+                branch="main",
+            )
+    except Exception:
+        pass
+
     if req.install_orchestrator:
         try:
             install_orchestrator_workflow(repo=repo, client=client, branch="main")
@@ -968,7 +996,16 @@ def launch_project(req: LaunchRequest):
     stations_connected = False
     if req.enable_stations:
         try:
-            # Run factory create locally
+            mode, base_url, api_key = get_openhands_client_config()
+            env = os.environ.copy()
+            if mode == "cloud":
+                env["OPENHANDS_HOST"] = base_url or "https://app.all-hands.dev"
+                env["OPENHANDS_API_KEY"] = api_key
+            else:
+                env["OPENHANDS_HOST"] = base_url or "http://localhost:8000"
+                env["OPENHANDS_AUTOMATION_API_KEY"] = api_key
+            env["GITHUB_PERSONAL_ACCESS_TOKEN"] = client.token
+
             cmd = [
                 sys.executable,
                 str(SCRIPTS_DIR / "factory.py"),
@@ -978,7 +1015,7 @@ def launch_project(req: LaunchRequest):
                 "--ids",
                 "github-issue-to-pr,github-pr-reviewer,github-phase-orchestrator,github-pr-healer,github-delivery-watchdog",
             ]
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            res = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=25)
             if res.returncode == 0:
                 stations_connected = True
         except Exception:
@@ -991,6 +1028,7 @@ def launch_project(req: LaunchRequest):
         "status": "launched",
         "repo": repo,
         "repo_created": repo_created,
+        "skill_injected": skill_injected,
         "orchestrator_installed": orchestrator_installed,
         "stations_connected": stations_connected,
         "total_phases": len(tasks),
