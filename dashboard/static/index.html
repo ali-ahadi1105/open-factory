@@ -1848,16 +1848,24 @@
           try {
             const res = await fetch('/api/openhands/conversations?limit=25');
             const data = await res.json();
-            this.openhandsConversations = data.conversations || [];
+            const fetched = data.conversations || [];
+            // If activeConversation is set and not in fetched list yet, keep it pinned at top
+            if (this.activeConversation && !fetched.some(c => c.id === this.activeConversation.id)) {
+              this.openhandsConversations = [this.activeConversation, ...fetched];
+            } else {
+              this.openhandsConversations = fetched;
+            }
           } catch (e) {
             console.error('Failed to fetch OpenHands conversations', e);
           }
         },
 
-        async selectConversation(id) {
+        async selectConversation(id, preserveEvents = false) {
           this.activeConversationId = id;
-          this.activeConversation = this.openhandsConversations.find(c => c.id === id) || null;
-          this.conversationEvents = [];
+          this.activeConversation = this.openhandsConversations.find(c => c.id === id) || this.activeConversation;
+          if (!preserveEvents) {
+            this.conversationEvents = [];
+          }
           await this.fetchEvents(id);
         },
 
@@ -1874,7 +1882,7 @@
               this.conversationEvents = [...serverEvents, ...pendingUserMessages];
               if (data.status) {
                 if (this.activeConversation) this.activeConversation.status = data.status;
-                if (data.status !== 'running') {
+                if (data.status === 'finished' || data.status === 'stopped' || data.status === 'idle') {
                   this.isAgentThinking = false;
                 }
               }
@@ -1908,9 +1916,24 @@
             const data = await res.json();
             if (!res.ok) throw new Error(data.detail || 'Failed to start conversation');
             const newId = data.id || data.conversation_id;
-            await this.fetchConversationsList();
             if (newId) {
-              await this.selectConversation(newId);
+              const newConvObj = {
+                id: newId,
+                title: data.title || title,
+                status: data.status || 'starting',
+                created_at: data.created_at || new Date().toISOString(),
+                selected_repository: this.selectedRepo || null
+              };
+              // Immediately unshift into the list and select it
+              this.openhandsConversations = [newConvObj, ...this.openhandsConversations.filter(c => c.id !== newId)];
+              this.activeConversationId = newId;
+              this.activeConversation = newConvObj;
+              if (!initialMsg) {
+                this.conversationEvents = [];
+              }
+              // Sync with backend without losing active conversation
+              await this.fetchConversationsList();
+              await this.selectConversation(newId, !!initialMsg);
               this.showToast(this.currentLang === 'fa' ? 'گفتگوی جدید با ایجنت آغاز شد' : 'New agent conversation started', 'success', 'sparkles');
             }
             return newId;

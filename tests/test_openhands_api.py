@@ -18,6 +18,20 @@ from app import (
 
 
 class TestOpenHandsIntegration(unittest.TestCase):
+    _original_config_backup = None
+
+    @classmethod
+    def setUpClass(cls):
+        from app import OPENHANDS_CONFIG_FILE
+        if OPENHANDS_CONFIG_FILE.is_file():
+            cls._original_config_backup = OPENHANDS_CONFIG_FILE.read_text(encoding="utf-8")
+
+    @classmethod
+    def tearDownClass(cls):
+        from app import OPENHANDS_CONFIG_FILE
+        if cls._original_config_backup is not None:
+            OPENHANDS_CONFIG_FILE.write_text(cls._original_config_backup, encoding="utf-8")
+
     def test_extract_text_content(self):
         self.assertEqual(extract_text_content("hello"), "hello")
         self.assertEqual(extract_text_content([{"text": "foo"}, {"text": "bar"}]), "foo\nbar")

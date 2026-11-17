@@ -169,6 +169,9 @@ def ensure_project_tracked(repo: str, name: str = "", description: str = ""):
 
 # --- OpenHands Runtime & Engine Helpers ---
 
+CLOUD_CONVERSATIONS_RUNTIME_MAP: dict[str, dict[str, Any]] = {}
+RECENT_CONVERSATIONS: dict[str, dict[str, Any]] = {}
+
 def get_default_local_key() -> str:
     key_file = Path.home() / ".openhands" / "agent-canvas" / "api-key.txt"
     if key_file.is_file():
@@ -287,7 +290,13 @@ def openhands_request(
                 content = resp.read().decode("utf-8")
                 if not content:
                     return {}
+                stripped = content.strip()
+                if stripped.startswith("<") or "<!doctype html" in stripped[:100].lower():
+                    # HTML fallback returned by SPA routing, treat as 404 endpoint not found
+                    raise HTTPException(status_code=404, detail=f"Endpoint {path} returned HTML instead of JSON")
                 return json.loads(content)
+        except HTTPException:
+            raise
         except urllib.error.HTTPError as err:
             err_body = err.read().decode("utf-8", errors="replace")
             try:
@@ -1243,17 +1252,53 @@ def list_openhands_conversations(limit: int = 25):
             items = []
 
         conversations = []
+        seen_ids = set()
         for c in items:
             cid = c.get("id") or c.get("app_conversation_id") or c.get("conversation_id")
             if not cid:
                 continue
+            seen_ids.add(cid)
+            title = c.get("title") or f"Conversation {cid[:5]}"
+            status = c.get("execution_status") or c.get("status") or "running"
+            created_at = c.get("created_at")
+            repo = c.get("selected_repository")
+            conv_url = c.get("conversation_url")
+            sess_key = c.get("session_api_key")
+
+            if conv_url:
+                CLOUD_CONVERSATIONS_RUNTIME_MAP[cid] = {
+                    "conversation_url": conv_url,
+                    "session_api_key": sess_key or "",
+                    "title": title,
+                    "status": status,
+                    "created_at": created_at,
+                    "selected_repository": repo,
+                }
+
             conversations.append({
                 "id": cid,
-                "title": c.get("title") or "گفتگوی بدون عنوان",
-                "status": c.get("execution_status") or c.get("status") or "running",
-                "created_at": c.get("created_at"),
-                "selected_repository": c.get("selected_repository"),
+                "title": title,
+                "status": status,
+                "created_at": created_at,
+                "selected_repository": repo,
             })
+
+        # Prepend any recent conversations that haven't been indexed by the backend yet
+        now = time.time()
+        for r_id, r_info in list(RECENT_CONVERSATIONS.items()):
+            if now - r_info.get("_timestamp", now) > 600:
+                RECENT_CONVERSATIONS.pop(r_id, None)
+                continue
+            if r_id not in seen_ids:
+                conversations.insert(0, {
+                    "id": r_id,
+                    "title": r_info.get("title") or "گفتگوی جدید",
+                    "status": r_info.get("status") or "starting",
+                    "created_at": r_info.get("created_at"),
+                    "selected_repository": r_info.get("selected_repository"),
+                })
+                seen_ids.add(r_id)
+
         return {"conversations": conversations}
     except Exception as exc:
         return {"conversations": [], "warning": str(exc), "connected": False}
@@ -1344,6 +1389,30 @@ def create_openhands_conversation(req: OpenHandsConversationCreate):
     if conv_id:
         res["id"] = conv_id
         res["conversation_id"] = conv_id
+        title = req.title or (req.initial_message[:30] if req.initial_message else "گفتگوی جدید")
+        status = res.get("status") or res.get("execution_status") or "starting"
+        created_at = res.get("created_at") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        res["title"] = title
+        res["status"] = status
+        res["created_at"] = created_at
+        res["selected_repository"] = req.repository
+        RECENT_CONVERSATIONS[conv_id] = {
+            "id": conv_id,
+            "title": title,
+            "status": status,
+            "created_at": created_at,
+            "selected_repository": req.repository,
+            "_timestamp": time.time(),
+        }
+        if res.get("conversation_url"):
+            CLOUD_CONVERSATIONS_RUNTIME_MAP[conv_id] = {
+                "conversation_url": res["conversation_url"],
+                "session_api_key": res.get("session_api_key") or "",
+                "title": title,
+                "status": status,
+                "created_at": created_at,
+                "selected_repository": req.repository,
+            }
 
     # If an initial message was supplied and not auto-run, trigger event
     if conv_id and req.initial_message and not res.get("last_user_message_id") and not res.get("leaf_event_id"):
@@ -1362,8 +1431,27 @@ def create_openhands_conversation(req: OpenHandsConversationCreate):
 
 @app.get("/api/openhands/conversations/{conversation_id}")
 def get_openhands_conversation(conversation_id: str):
+    if conversation_id in RECENT_CONVERSATIONS:
+        r = RECENT_CONVERSATIONS[conversation_id]
+        return {
+            "id": conversation_id,
+            "title": r.get("title") or "گفتگو",
+            "status": r.get("status") or "running",
+            "created_at": r.get("created_at"),
+            "selected_repository": r.get("selected_repository"),
+        }
+    if conversation_id in CLOUD_CONVERSATIONS_RUNTIME_MAP:
+        r = CLOUD_CONVERSATIONS_RUNTIME_MAP[conversation_id]
+        return {
+            "id": conversation_id,
+            "title": r.get("title") or "گفتگو",
+            "status": r.get("status") or "running",
+            "created_at": r.get("created_at"),
+            "selected_repository": r.get("selected_repository"),
+        }
+
     res = None
-    for ep in [f"/api/v1/app-conversations/{conversation_id}", f"/api/conversations/{conversation_id}"]:
+    for ep in [f"/api/conversations/{conversation_id}", f"/api/v1/app-conversations/{conversation_id}"]:
         try:
             res = openhands_request("GET", ep)
             if res:
@@ -1372,8 +1460,22 @@ def get_openhands_conversation(conversation_id: str):
             if he.status_code in (404, 405):
                 continue
             raise
+        except Exception:
+            continue
+
     if not res:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        list_res = list_openhands_conversations(limit=50)
+        for c in list_res.get("conversations", []):
+            if c["id"] == conversation_id:
+                return c
+        return {
+            "id": conversation_id,
+            "title": "گفتگو",
+            "status": "running",
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "selected_repository": None,
+        }
+
     cid = res.get("id") or res.get("app_conversation_id") or conversation_id
     return {
         "id": cid,
@@ -1386,30 +1488,64 @@ def get_openhands_conversation(conversation_id: str):
 
 @app.get("/api/openhands/conversations/{conversation_id}/events")
 def get_openhands_events(conversation_id: str, limit: int = 100):
-    # Fetch latest events in descending order, then reverse to display chronologically
+    mode, base_url, api_key = get_openhands_client_config()
     res = None
-    for ep in [
-        f"/api/conversations/{conversation_id}/events/search",
-        f"/api/v1/app-conversations/{conversation_id}/events/search",
-        f"/api/v1/conversation/{conversation_id}/events/search",
-        f"/api/conversations/{conversation_id}/events",
-        f"/api/v1/app-conversations/{conversation_id}/events",
-    ]:
-        try:
-            res = openhands_request(
-                "GET",
-                ep,
-                params={"limit": limit, "sort_order": "TIMESTAMP_DESC"},
-                timeout=3.0
-            )
-            if res is not None:
-                break
-        except HTTPException as he:
-            if he.status_code in (404, 405):
+
+    # 1. Cloud mode runtime pod resolution
+    if mode == "cloud":
+        runtime_info = CLOUD_CONVERSATIONS_RUNTIME_MAP.get(conversation_id)
+        if not runtime_info or not runtime_info.get("conversation_url"):
+            list_openhands_conversations(limit=25)
+            runtime_info = CLOUD_CONVERSATIONS_RUNTIME_MAP.get(conversation_id)
+
+        if runtime_info and runtime_info.get("conversation_url"):
+            pod_url = runtime_info["conversation_url"].rstrip("/")
+            pod_key = runtime_info.get("session_api_key") or api_key
+            headers = {"Accept": "application/json"}
+            if pod_key:
+                headers["X-Session-API-Key"] = pod_key
+                headers["Authorization"] = f"Bearer {pod_key}"
+            try:
+                search_url = f"{pod_url}/events/search?limit={limit}&sort_order=TIMESTAMP_DESC"
+                req = urllib.request.Request(search_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=3.5) as resp:
+                    raw = resp.read().decode("utf-8")
+                    if raw and not raw.strip().startswith("<"):
+                        res = json.loads(raw)
+            except Exception:
+                pass
+        else:
+            return {
+                "conversation_id": conversation_id,
+                "status": "starting",
+                "total_events": 0,
+                "events": [],
+                "notice": "سندباکس ایجنت در حال راه‌اندازی است..."
+            }
+
+    # 2. Local mode or standard routing
+    if res is None:
+        for ep in [
+            f"/api/conversations/{conversation_id}/events/search",
+            f"/api/conversations/{conversation_id}/events",
+            f"/api/v1/app-conversations/{conversation_id}/events/search",
+            f"/api/v1/app-conversations/{conversation_id}/events",
+        ]:
+            try:
+                res = openhands_request(
+                    "GET",
+                    ep,
+                    params={"limit": limit, "sort_order": "TIMESTAMP_DESC"},
+                    timeout=3.0
+                )
+                if res is not None:
+                    break
+            except HTTPException as he:
+                if he.status_code in (404, 405):
+                    continue
+                raise
+            except Exception:
                 continue
-            raise
-        except Exception:
-            continue
 
     raw_items = []
     if isinstance(res, dict):
@@ -1441,39 +1577,85 @@ def send_openhands_chat(conversation_id: str, req: AgentChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="پیام نمی‌تواند خالی باشد.")
 
+    mode, base_url, api_key = get_openhands_client_config()
     payload = {
         "role": "user",
         "content": [{"type": "text", "text": req.message}],
         "run": req.run,
     }
     res = None
-    for ep in [
-        f"/api/conversations/{conversation_id}/events",
-        f"/api/v1/app-conversations/{conversation_id}/events",
-        f"/api/v1/app-conversations/{conversation_id}/send-message",
-    ]:
-        try:
-            res = openhands_request("POST", ep, body=payload)
-            if res is not None:
-                break
-        except HTTPException as he:
-            if he.status_code in (404, 405):
-                continue
-            raise
-        except Exception:
-            continue
+    runtime_info = None
 
-    # Crucial: If conversation was paused or finished, trigger resume / run loop!
-    if req.run:
-        for run_ep in [
-            f"/api/conversations/{conversation_id}/run",
-            f"/api/v1/app-conversations/{conversation_id}/run",
+    # 1. Cloud mode direct pod delivery
+    if mode == "cloud":
+        runtime_info = CLOUD_CONVERSATIONS_RUNTIME_MAP.get(conversation_id)
+        if not runtime_info or not runtime_info.get("conversation_url"):
+            for _ in range(3):
+                list_openhands_conversations(limit=25)
+                runtime_info = CLOUD_CONVERSATIONS_RUNTIME_MAP.get(conversation_id)
+                if runtime_info and runtime_info.get("conversation_url"):
+                    break
+                time.sleep(1.0)
+
+        if runtime_info and runtime_info.get("conversation_url"):
+            pod_url = runtime_info["conversation_url"].rstrip("/")
+            pod_key = runtime_info.get("session_api_key") or api_key
+            headers = {"Content-Type": "application/json", "Accept": "application/json"}
+            if pod_key:
+                headers["X-Session-API-Key"] = pod_key
+                headers["Authorization"] = f"Bearer {pod_key}"
+            try:
+                chat_url = f"{pod_url}/events"
+                data_bytes = json.dumps(payload).encode("utf-8")
+                req_obj = urllib.request.Request(chat_url, data=data_bytes, headers=headers, method="POST")
+                with urllib.request.urlopen(req_obj, timeout=5.0) as resp:
+                    raw = resp.read().decode("utf-8")
+                    res = json.loads(raw) if raw and not raw.strip().startswith("<") else {"success": True}
+            except Exception as e:
+                raise HTTPException(status_code=502, detail=f"Failed to deliver message to cloud pod: {e}")
+
+    # 2. Local mode or fallback
+    if res is None:
+        for ep in [
+            f"/api/conversations/{conversation_id}/events",
+            f"/api/v1/app-conversations/{conversation_id}/events",
+            f"/api/v1/app-conversations/{conversation_id}/send-message",
         ]:
             try:
-                openhands_request("POST", run_ep, body={})
-                break
+                res = openhands_request("POST", ep, body=payload)
+                if res is not None:
+                    break
+            except HTTPException as he:
+                if he.status_code in (404, 405):
+                    continue
+                raise
+            except Exception:
+                continue
+
+    # Crucial: Trigger run loop if requested
+    if req.run and res is not None:
+        if mode == "cloud" and runtime_info and runtime_info.get("conversation_url"):
+            try:
+                pod_url = runtime_info["conversation_url"].rstrip("/")
+                pod_key = runtime_info.get("session_api_key") or api_key
+                headers = {"Content-Type": "application/json", "Accept": "application/json"}
+                if pod_key:
+                    headers["X-Session-API-Key"] = pod_key
+                    headers["Authorization"] = f"Bearer {pod_key}"
+                r_obj = urllib.request.Request(f"{pod_url}/run", data=b"{}", headers=headers, method="POST")
+                urllib.request.urlopen(r_obj, timeout=3.0)
             except Exception:
                 pass
+        else:
+            for run_ep in [
+                f"/api/conversations/{conversation_id}/run",
+                f"/api/v1/app-conversations/{conversation_id}/run",
+            ]:
+                try:
+                    openhands_request("POST", run_ep, body={})
+                    break
+                except Exception:
+                    pass
 
     return {"status": "sent", "response": res}
 
