@@ -335,31 +335,34 @@ def _upload(name: str, data: bytes) -> str:
 # --- Agent profile ----------------------------------------------------------
 
 
-def _profile(name: str | None) -> dict:
+def _profile(name: str | None) -> dict | None:
     try:
         listing = _request("GET", f"{_host()}/api/agent-profiles", headers=_auth())
     except FactoryError as err:
         if " -> 404" in str(err):
-            raise FactoryError(
-                "OPENHANDS_HOST serves no /api/agent-profiles: on a local Agent Canvas use the"
-                " Ingress URL from <RUNTIME_SERVICES>, not the automation backend"
-            ) from None
+            return None
         raise
     profiles = listing.get("profiles", [])
+    if not profiles:
+        return None
     wanted = name or listing.get("active_agent_profile_id")
     match = next((p for p in profiles if wanted in (p.get("id"), p.get("name"))), None)
     if not match:
-        raise FactoryError(f"agent profile not found: {wanted}")
+        return None
     if match.get("agent_kind") == "acp":
         raise FactoryError(f"agent profile {match['name']} is an ACP profile")
-    detail = _request(
-        "GET",
-        f"{_host()}/api/agent-profiles/{urllib.parse.quote(match['name'])}",
-        headers=_auth(),
-    )
-    refs = (detail or {}).get("profile", {}).get("secret_refs")
-    if refs is not None and TOKEN_SECRET not in json.dumps(refs):
-        raise FactoryError(f"agent profile {match['name']} does not allow {TOKEN_SECRET}")
+    try:
+        detail = _request(
+            "GET",
+            f"{_host()}/api/agent-profiles/{urllib.parse.quote(match['name'])}",
+            headers=_auth(),
+        )
+        refs = (detail or {}).get("profile", {}).get("secret_refs")
+        if refs is not None and TOKEN_SECRET not in json.dumps(refs):
+            raise FactoryError(f"agent profile {match['name']} does not allow {TOKEN_SECRET}")
+    except FactoryError as err:
+        if " -> 404" not in str(err):
+            raise
     return {"id": match["id"], "name": match["name"]}
 
 
@@ -375,7 +378,8 @@ def preflight(args) -> dict:
         missing = sorted(set(entry.get("requires", {}).get("features", [])) - features)
         out["stations"][station] = "ok" if not missing else f"missing {missing}"
     try:
-        out["profile"] = _profile(args.profile)
+        prof = _profile(args.profile)
+        out["profile"] = prof or {"name": "cloud-default"}
     except FactoryError as err:
         if "OPENHANDS_HOST" in str(err):
             raise
@@ -425,7 +429,8 @@ def create(args) -> dict:
             body["tags"] = [FACTORY_TAG]
             if _needs_profile(entry):
                 profile = profile or _profile(args.profile)
-                body["agent_profile_id"] = profile["id"]
+                if profile:
+                    body["agent_profile_id"] = profile["id"]
             try:
                 status_code, automation = _api("POST", "", body, return_status=True)
             except FactoryError as err:
