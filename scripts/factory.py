@@ -202,9 +202,14 @@ def _release_ref() -> str | None:
 
 
 def _manifest(station: str) -> dict:
-    local_path = LOCAL_ROOT / "automations" / "catalog" / station / "manifest.json"
-    if local_path.is_file():
-        return json.loads(local_path.read_text(encoding="utf-8"))
+    candidates = [
+        LOCAL_ROOT / "automations" / "catalog" / station / "manifest.json",
+        Path.home() / ".openhands" / "skills" / "ali-factory" / "automations" / "catalog" / station / "manifest.json",
+        Path.home() / ".openhands" / "skills" / "installed" / "ali-factory" / "automations" / "catalog" / station / "manifest.json",
+    ]
+    for p in candidates:
+        if p.is_file():
+            return json.loads(p.read_text(encoding="utf-8"))
     path = _extensions() / "automations" / "catalog" / station / "manifest.json"
     if not path.is_file():
         raise FactoryError(f"unknown station: {station}")
