@@ -307,7 +307,7 @@ def sync_ali_factory_skill() -> bool:
     ]
 
     files_to_copy = ["SKILL.md", "README.md"]
-    dirs_to_copy = ["commands", "scripts", "templates"]
+    dirs_to_copy = ["commands", "scripts", "templates", "automations"]
 
     for target in targets:
         target.mkdir(parents=True, exist_ok=True)
@@ -391,7 +391,7 @@ def inject_skill_into_repo(repo_path_str: str) -> bool:
     target.mkdir(parents=True, exist_ok=True)
 
     files_to_copy = ["SKILL.md", "README.md"]
-    dirs_to_copy = ["commands", "scripts", "templates"]
+    dirs_to_copy = ["commands", "scripts", "templates", "automations"]
 
     for fname in files_to_copy:
         src = REPO_ROOT / fname
@@ -526,18 +526,19 @@ def launch_openhands_engine() -> bool:
 
     cmd = None
     if shutil.which("agent-canvas"):
-        cmd = ["agent-canvas"]
+        cmd = ["agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
     elif shutil.which("npx"):
-        cmd = ["npx", "--yes", "@openhands/agent-canvas"]
+        cmd = ["npx", "--yes", "@openhands/agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
     else:
         print(f"  {RED}✗{RESET} Cannot launch OpenHands: neither 'agent-canvas' nor 'npx' is installed.")
         return False
 
-    print(f"  {CYAN}▶{RESET} Starting OpenHands Agent Canvas on port 8000 in background...")
+    print(f"  {CYAN}▶{RESET} Starting OpenHands Agent Canvas on 0.0.0.0:8000 in background...")
     env = os.environ.copy()
     local_bin = str(Path.home() / ".local" / "bin")
     if local_bin not in env.get("PATH", ""):
         env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
+    env["LOCAL_BACKEND_API_KEY"] = "d77ee6b38acd8ae53ff4d2303c19746576a8a072553a8a7487764e4f61bbae4b"
 
     oh_log_file = open(LOGS_DIR / "openhands.log", "a")
     proc = subprocess.Popen(
