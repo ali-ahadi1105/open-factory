@@ -1,5 +1,11 @@
 [
   {
+    "repo": "ali-ahadi1105/test-do-app",
+    "name": "test-do-app",
+    "description": "Launched via Software Factory (34 phases)",
+    "created_at": "2026-11-18T08:23:37Z"
+  },
+  {
     "repo": "ali-ahadi1105/nextjs-saas",
     "name": "nextjs-saas",
     "description": "Autonomous Software Factory project created via Dashboard",
