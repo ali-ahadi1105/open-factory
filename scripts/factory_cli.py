@@ -521,20 +521,45 @@ def launch_openhands_engine() -> bool:
         print(f"  {GREEN}✓{RESET} OpenHands Engine is already running ({local_url})")
         return True
 
-    # Free conflicting stale ports (8000, 18000, 18001) before starting
-    free_ports(8000, 18000, 18001)
+    parsed_oh = urllib.parse.urlparse(local_url)
+    oh_port = parsed_oh.port or 8000
+    oh_host = parsed_oh.hostname or "0.0.0.0"
+    if oh_host in ("127.0.0.1", "localhost"):
+        oh_host = "0.0.0.0"
+
+    # If an existing docker container named 'openhands' is present, try restarting it first
+    if shutil.which("docker"):
+        try:
+            d_check = subprocess.run(
+                ["docker", "ps", "-a", "--filter", "name=^/openhands$", "--format", "{{.Status}}"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if "Up" in d_check.stdout:
+                subprocess.run(["docker", "restart", "openhands"], capture_output=True, timeout=10)
+                time.sleep(2)
+                if check_openhands_health(local_url):
+                    print(f"  {GREEN}✓{RESET} OpenHands Engine (Docker) started successfully ({local_url})!")
+                    return True
+        except Exception:
+            pass
+
+    # Free conflicting stale ports (oh_port, 18000, 18001) before starting
+    free_ports(oh_port, 18000, 18001)
 
     cmd = None
     if shutil.which("agent-canvas"):
-        cmd = ["agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
+        cmd = ["agent-canvas", "--host", oh_host, "--port", str(oh_port), "--allow-lan-session-key"]
     elif shutil.which("npx"):
-        cmd = ["npx", "--yes", "@openhands/agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
+        cmd = ["npx", "--yes", "@openhands/agent-canvas", "--host", oh_host, "--port", str(oh_port), "--allow-lan-session-key"]
     else:
         print(f"  {RED}✗{RESET} Cannot launch OpenHands: neither 'agent-canvas' nor 'npx' is installed.")
         return False
 
-    print(f"  {CYAN}▶{RESET} Starting OpenHands Agent Canvas on 0.0.0.0:8000 in background...")
+    print(f"  {CYAN}▶{RESET} Starting OpenHands Agent Canvas on {oh_host}:{oh_port} in background...")
     env = os.environ.copy()
+    env["PORT"] = str(oh_port)
     local_bin = str(Path.home() / ".local" / "bin")
     if local_bin not in env.get("PATH", ""):
         env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
@@ -568,14 +593,20 @@ def launch_openhands_engine() -> bool:
 # Dashboard Server Management
 # ---------------------------------------------------------------------------
 def check_dashboard_health(port: int = 8080) -> bool:
-    endpoints = ["/api/system/status", "/", "/api/projects"]
+    endpoints = ["/api/system/status", "/api/projects", "/"]
     for ep in endpoints:
         try:
             url = f"http://127.0.0.1:{port}{ep}"
             req = urllib.request.Request(url, headers={"User-Agent": "OpenFactory-CLI"})
             with urllib.request.urlopen(req, timeout=3.5) as resp:
                 if resp.status == 200:
-                    return True
+                    if ep == "/":
+                        content = resp.read().decode("utf-8", errors="ignore")
+                        # Must be Open Factory Dashboard, not OpenHands or another web UI
+                        if "Open Factory" in content or "Software Factory" in content or "open-factory" in content:
+                            return True
+                    else:
+                        return True
         except Exception:
             continue
     return False
@@ -593,7 +624,7 @@ def launch_dashboard(port: int = 8080) -> bool:
     uv_cmd = find_uv_cmd()
     cmd = []
     if uv_cmd:
-        cmd = [uv_cmd, "run", "--with", "fastapi", "--with", "uvicorn", "python3", "dashboard/app.py"]
+        cmd = [uv_cmd, "run", "--with", "fastapi", "--with", "uvicorn", "--with", "pydantic", "python3", "dashboard/app.py"]
     else:
         try:
             import fastapi, uvicorn

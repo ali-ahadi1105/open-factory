@@ -202,14 +202,12 @@ def load_openhands_config() -> dict[str, Any]:
     try:
         data = json.loads(OPENHANDS_CONFIG_FILE.read_text(encoding="utf-8"))
         if "mode" not in data or data["mode"] not in ("local", "cloud"):
-            data["mode"] = "local"
+            env_mode = os.environ.get("OPENHANDS_MODE")
+            data["mode"] = env_mode if env_mode in ("local", "cloud") else "local"
         if "local" not in data:
             data["local"] = default_cfg["local"]
         if "cloud" not in data:
             data["cloud"] = default_cfg["cloud"]
-        env_mode = os.environ.get("OPENHANDS_MODE")
-        if env_mode in ("local", "cloud"):
-            data["mode"] = env_mode
         cloud_key = os.environ.get("OPENHANDS_CLOUD_API_KEY")
         if cloud_key:
             data["cloud"]["api_key"] = cloud_key.strip()
@@ -899,6 +897,18 @@ def track_project(req: TrackRequest):
     return {"status": "ok", "repo": repo}
 
 
+@app.delete("/api/projects/{owner}/{repo}")
+@app.delete("/api/projects/untrack/{owner}/{repo}")
+def untrack_project(owner: str, repo: str):
+    full_repo = f"{owner}/{repo}".lower()
+    projects = load_tracked_projects()
+    new_projects = [p for p in projects if p.get("repo", "").lower() != full_repo]
+    if len(new_projects) == len(projects):
+        raise HTTPException(status_code=404, detail=f"پروژه '{owner}/{repo}' در لیست یافت نشد.")
+    save_tracked_projects(new_projects)
+    return {"status": "ok", "deleted": f"{owner}/{repo}", "remaining": len(new_projects)}
+
+
 @app.post("/api/projects/launch")
 @app.post("/api/launch")
 def launch_project(req: LaunchRequest):
@@ -1204,6 +1214,8 @@ def update_openhands_config(req: OpenHandsConfigUpdate):
     cfg = load_openhands_config()
     if req.mode in ("local", "cloud"):
         cfg["mode"] = req.mode
+        if "OPENHANDS_MODE" in os.environ:
+            os.environ["OPENHANDS_MODE"] = req.mode
 
     # Flat or nested local settings
     local_url = req.local_base_url or (req.local.get("base_url") if req.local else None)
