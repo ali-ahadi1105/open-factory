@@ -526,9 +526,9 @@ def launch_openhands_engine() -> bool:
 
     cmd = None
     if shutil.which("agent-canvas"):
-        cmd = ["agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
+        cmd = ["agent-canvas", "--host", "0.0.0.0", "--port", "8000", "--allow-lan-session-key"]
     elif shutil.which("npx"):
-        cmd = ["npx", "--yes", "@openhands/agent-canvas", "--host", "0.0.0.0", "--allow-lan-session-key"]
+        cmd = ["npx", "--yes", "@openhands/agent-canvas", "--host", "0.0.0.0", "--port", "8000", "--allow-lan-session-key"]
     else:
         print(f"  {RED}✗{RESET} Cannot launch OpenHands: neither 'agent-canvas' nor 'npx' is installed.")
         return False
@@ -539,6 +539,8 @@ def launch_openhands_engine() -> bool:
     if local_bin not in env.get("PATH", ""):
         env["PATH"] = f"{local_bin}:{env.get('PATH', '')}"
     env["LOCAL_BACKEND_API_KEY"] = "d77ee6b38acd8ae53ff4d2303c19746576a8a072553a8a7487764e4f61bbae4b"
+    # Isolate OpenHands port from dashboard's PORT in .env
+    env["PORT"] = "8000"
 
     oh_log_file = open(LOGS_DIR / "openhands.log", "a")
     proc = subprocess.Popen(
